@@ -39,6 +39,19 @@ function payloadToData(payload: ProcessCallResult['templatePayload']): Record<st
   return base
 }
 
+const historyDateFormatter = new Intl.DateTimeFormat('es-DO', {
+  dateStyle: 'medium',
+  timeStyle: 'short'
+})
+
+function formatHistoryDate(value: string): string {
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) {
+    return value
+  }
+  return historyDateFormatter.format(d)
+}
+
 export function App(): ReactElement {
   const [profileName, setProfileName] = useState<string>('')
   const [view, setView] = useState<View>({ name: 'profile' })
@@ -263,28 +276,6 @@ export function App(): ReactElement {
     setView({ name: 'session', sessionId: id, transcript: result.transcript, templateId: result.templatePayload.templateId, warnings: result.validationWarnings })
   }
 
-  const importFixture = useCallback(async () => {
-    setError(null)
-    const picked = await window.api.importAudioFile()
-    if (picked.canceled) {
-      return
-    }
-    setBusy('Importing and processing…')
-    try {
-      const result = await window.api.processImportedFile({
-        sessionId: picked.sessionId,
-        sourcePath: picked.sourcePath,
-        profileName: picked.profileName.trim() || (await window.api.getProfileName())?.trim() || ''
-      })
-      applyProcessResult(picked.sessionId, result)
-      await refreshHistory()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setBusy(null)
-    }
-  }, [refreshHistory])
-
   const openHistory = useCallback(async () => {
     setError(null)
     await refreshHistory()
@@ -432,12 +423,6 @@ export function App(): ReactElement {
               {recorder.state.status === 'error' ? <p className="warnings">{recorder.state.message}</p> : null}
             </div>
 
-            <div className="panel stack">
-              <h2>Import audio (test / fixture)</h2>
-              <button type="button" disabled={!!busy} onClick={() => void importFixture()}>
-                Choose audio file…
-              </button>
-            </div>
           </div>
         ) : null}
 
@@ -449,7 +434,7 @@ export function App(): ReactElement {
                 <li key={s.id}>
                   <div>
                     <div>
-                      <strong>{s.endedAt}</strong> · {s.profileName}
+                      <strong>{formatHistoryDate(s.endedAt)}</strong> · {s.profileName}
                     </div>
                     <div className="muted">{TEMPLATE_LABELS[s.templateId]}</div>
                     <div className="muted">{s.preview}</div>
