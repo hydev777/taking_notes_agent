@@ -1,0 +1,14 @@
+---
+description: Taking Notes Agent — Electron/React/TS conventions
+globs: "**/*.{ts,tsx}"
+alwaysApply: false
+---
+
+# Taking Notes Agent rules
+
+- Use **TypeScript strict** patterns; avoid `any`. Validate unknown JSON with **Zod** before trusting it.
+- **React:** function components + hooks; keep components small; prefer composition.
+- **Readability:** early returns, low nesting depth; extract helpers instead of growing a single function.
+- **DRY:** template fields should stay aligned between Zod (`zodTemplates.ts`) and UI metadata (`templateFormMeta.ts`).
+- **Electron:** only call Node/SQLite/OpenAI/SMTP from **main**; renderer uses `window.api` from preload.
+- **UI:** accessible forms (labels, focus), visible loading and error states.
