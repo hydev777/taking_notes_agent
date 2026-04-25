@@ -14,10 +14,11 @@ import {
   getProfileName,
   getSessionRow,
   insertSession,
-  listSessionRows,
+  listSessionRowsLight,
   markEmailSent,
   setProfileName,
   updateSessionTemplate,
+  type DbSessionListRowLight,
   type DbSessionRow
 } from './services/db'
 import { buildEmailPreview, readSmtpFromEnv, sendEmail } from './services/emailService'
@@ -37,14 +38,6 @@ function requireApiKey(): string {
     throw new Error('Missing OPENAI_API_KEY in environment (.env in project or userData).')
   }
   return key
-}
-
-function previewFromTranscript(transcript: string): string {
-  const t = transcript.replace(/\s+/g, ' ').trim()
-  if (t.length <= 100) {
-    return t
-  }
-  return `${t.slice(0, 97)}…`
 }
 
 function applyAgentToPayload(payload: TemplatePayload, agentName: string): TemplatePayload {
@@ -123,14 +116,14 @@ async function runPipelineOnDiskFile(input: {
   return { transcript, templatePayload: payload, validationWarnings }
 }
 
-function rowToListItem(row: DbSessionRow): SessionListItem {
+function rowToListItem(row: DbSessionListRowLight): SessionListItem {
   const templateId = templateIdSchema.parse(row.template_id)
   return {
     id: row.id,
     endedAt: row.ended_at,
     profileName: row.profile_name,
     templateId,
-    preview: previewFromTranscript(row.transcript),
+    preview: row.preview,
     audioPath: row.audio_path
   }
 }
@@ -147,7 +140,10 @@ function rowToRecord(row: DbSessionRow): SessionRecord {
     templateId,
     templateJson: row.template_json,
     emailSentAt: row.email_sent_at,
-    preview: previewFromTranscript(row.transcript)
+    preview:
+      row.transcript.replace(/\s+/g, ' ').trim().length <= 100
+        ? row.transcript.replace(/\s+/g, ' ').trim()
+        : `${row.transcript.replace(/\s+/g, ' ').trim().slice(0, 97)}…`
   }
 }
 
@@ -159,7 +155,7 @@ export function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('tna:list-sessions', async () => {
-    return listSessionRows().map(rowToListItem)
+    return listSessionRowsLight().map(rowToListItem)
   })
 
   ipcMain.handle('tna:get-session', async (_e, id: string) => {

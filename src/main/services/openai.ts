@@ -4,6 +4,8 @@ import type { TemplateId } from '../../shared/templateId'
 
 const TRANSCRIBE_URL = 'https://api.openai.com/v1/audio/transcriptions'
 const CHAT_URL = 'https://api.openai.com/v1/chat/completions'
+const TRANSCRIBE_TIMEOUT_MS = 90_000
+const CHAT_TIMEOUT_MS = 45_000
 
 /** Budget chat model for plain-text template paragraph only (not JSON extraction). Override via OPENAI_TEMPLATE_PARAGRAPH_MODEL. */
 const DEFAULT_TEMPLATE_PARAGRAPH_MODEL = 'gpt-3.5-turbo'
@@ -30,6 +32,27 @@ function tailTranscript(transcript: string, maxChars: number): string {
     return t
   }
   return t.slice(-maxChars)
+}
+
+async function fetchWithTimeout(
+  input: string,
+  init: RequestInit,
+  timeoutMs: number,
+  timeoutLabel: string
+): Promise<Response> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    return await fetch(input, { ...init, signal: controller.signal })
+  } catch (e) {
+    const aborted = e instanceof DOMException && e.name === 'AbortError'
+    if (aborted) {
+      throw new Error(`${timeoutLabel} timed out after ${Math.round(timeoutMs / 1000)}s`)
+    }
+    throw e
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 const SYSTEM_PROMPT = `You are an intake note assistant for a US law firm answering service (DTLA-style).
@@ -72,13 +95,18 @@ export async function transcribeAudioFile(params: {
   body.append('file', new Blob([buffer], { type: params.mimeType }), params.filename)
   body.append('model', 'whisper-1')
 
-  const res = await fetch(TRANSCRIBE_URL, {
+  const res = await fetchWithTimeout(
+    TRANSCRIBE_URL,
+    {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${params.apiKey}`
     },
     body
-  })
+    },
+    TRANSCRIBE_TIMEOUT_MS,
+    'Transcription request'
+  )
 
   if (!res.ok) {
     const errText = await res.text()
@@ -99,7 +127,9 @@ export async function structureTemplateFromTranscript(params: {
 }): Promise<TemplatePayload> {
   const user = `Agent name for templates (use in "agent" where applicable): ${params.agentName}\n\nTranscript:\n${params.transcript}`
 
-  const res = await fetch(CHAT_URL, {
+  const res = await fetchWithTimeout(
+    CHAT_URL,
+    {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${params.apiKey}`,
@@ -114,7 +144,10 @@ export async function structureTemplateFromTranscript(params: {
         { role: 'user', content: user }
       ]
     })
-  })
+    },
+    CHAT_TIMEOUT_MS,
+    'Template structuring request'
+  )
 
   if (!res.ok) {
     const errText = await res.text()
@@ -152,7 +185,9 @@ export async function synthesizeTemplateContextParagraph(params: {
   }
   const user = JSON.stringify(userPayload)
 
-  const res = await fetch(CHAT_URL, {
+  const res = await fetchWithTimeout(
+    CHAT_URL,
+    {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${params.apiKey}`,
@@ -166,7 +201,10 @@ export async function synthesizeTemplateContextParagraph(params: {
         { role: 'user', content: user }
       ]
     })
-  })
+    },
+    CHAT_TIMEOUT_MS,
+    'Template paragraph request'
+  )
 
   if (!res.ok) {
     const errText = await res.text()
