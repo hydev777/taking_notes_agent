@@ -1,6 +1,6 @@
 {
   "name": "taking-notes-agent",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "Desktop agent for CTM call notes: record, transcribe, template, email",
   "main": "out/main/index.js",
   "type": "module",
@@ -40,9 +40,23 @@
   "build": {
     "appId": "com.takingnotes.agent",
     "productName": "Taking Notes Agent",
-    "directories": { "output": "release" },
-    "files": ["out/**", "package.json"],
-    "extraResources": [{ "from": "resources", "to": "resources" }],
-    "win": { "target": ["nsis"] }
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "out/**",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "resources",
+        "to": "resources"
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    }
   }
 }

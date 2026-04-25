@@ -41,7 +41,7 @@ function createWindow(): BrowserWindow {
       preload,
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true
+      sandbox: false
     }
   })
   win.on('ready-to-show', () => {

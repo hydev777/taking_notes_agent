@@ -1,12 +1,39 @@
 # Changelog
 
-Generated from `main` commits.
-Generated at: 2026-04-25T16:00:22.771Z
+All notable changes to this project are documented in this file.
 
-| Date | Commit | Summary |
-| --- | --- | --- |
-| 2026-04-25 | `7995bdb` | Updated: added changelog |
-| 2026-04-25 | `d96edaf` | Updated: added review changes |
-| 2026-04-25 | `1643daf` | Updated: cahnges made to the structure |
-| 2026-04-25 | `ac37c4d` | Updated: removed import and added format date |
-| 2026-04-24 | `ad1ccaf` | Updated: first commit |
+The newest version appears first.
+
+## [v0.1.2] - 2026-04-25
+
+### Summary
+- Released `v0.1.2` with 6 change(s).
+- Changed: 1 item(s).
+- Chore: 5 item(s).
+
+### Changed
+- first commit (`ad1ccaf`)
+
+### Chore
+- update changelog (`7abc440`)
+- added changelog (`7995bdb`)
+- added review changes (`d96edaf`)
+- cahnges made to the structure (`1643daf`)
+- removed import and added format date (`ac37c4d`)
+
+## [v0.1.1] - 2026-04-25
+
+### Summary
+- Released `v0.1.1` with 6 change(s).
+- Changed: 1 item(s).
+- Chore: 5 item(s).
+
+### Changed
+- first commit (`ad1ccaf`)
+
+### Chore
+- update changelog (`7abc440`)
+- added changelog (`7995bdb`)
+- added review changes (`d96edaf`)
+- cahnges made to the structure (`1643daf`)
+- removed import and added format date (`ac37c4d`)
