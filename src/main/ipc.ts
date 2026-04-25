@@ -1,6 +1,6 @@
-import { ipcMain, dialog } from 'electron'
+import { app, ipcMain, dialog } from 'electron'
 import { writeFile, copyFile, unlink, readFile } from 'node:fs/promises'
-import { basename, extname, isAbsolute, resolve, sep } from 'node:path'
+import { basename, extname, isAbsolute, join, resolve, sep } from 'node:path'
 import { v4 as uuidv4 } from 'uuid'
 import type { ProcessCallResult, SessionListItem, SessionRecord } from '../shared/ipc'
 import type { TemplateId } from '../shared/templateId'
@@ -189,6 +189,18 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('tna:list-sessions', async () => {
     return listSessionRowsLight().map(rowToListItem)
+  })
+
+  ipcMain.handle('tna:get-changelog', async () => {
+    try {
+      const appPath = app.getAppPath()
+      const changelogPath = join(appPath, 'CHANGELOG.md')
+      const markdown = await readFile(changelogPath, 'utf8')
+      return { ok: true as const, markdown }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      return { ok: false as const, error: `Could not read CHANGELOG.md: ${msg}` }
+    }
   })
 
   ipcMain.handle('tna:get-session', async (_e, id: string) => {

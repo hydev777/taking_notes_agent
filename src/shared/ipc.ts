@@ -48,6 +48,10 @@ export type SynthesizeTemplateParagraphResult =
   | { ok: true; paragraph: string }
   | { ok: false; error: string }
 
+export type GetChangelogResult =
+  | { ok: true; markdown: string }
+  | { ok: false; error: string }
+
 export type IpcApi = {
   getProfileName: () => Promise<string | null>
   setProfileName: (name: string) => Promise<void>
@@ -87,6 +91,7 @@ export type IpcApi = {
     templateJson: string
     transcript: string
   }) => Promise<SynthesizeTemplateParagraphResult>
+  getChangelog: () => Promise<GetChangelogResult>
 }
 
 declare global {

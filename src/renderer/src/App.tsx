@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState, type ReactElement } from 'react'
+import { ChangelogView } from './components/ChangelogView'
 import { HistoryView } from './components/HistoryView'
 import { HomeView } from './components/HomeView'
 import { ProfileView } from './components/ProfileView'
-type TabKey = 'profile' | 'home' | 'history'
+type TabKey = 'profile' | 'home' | 'history' | 'changelog'
 
 export function App(): ReactElement {
   const [profileName, setProfileName] = useState<string>('')
@@ -51,6 +52,9 @@ export function App(): ReactElement {
     if (activeTab === 'profile') {
       return 'Profile'
     }
+    if (activeTab === 'changelog') {
+      return 'Changelog'
+    }
     return 'Taking Notes Agent'
   }, [activeTab])
 
@@ -82,6 +86,15 @@ export function App(): ReactElement {
             title={tabsBlockedByCapture ? 'Stop or cancel current recording/share first.' : undefined}
           >
             History
+          </button>
+          <button
+            type="button"
+            className={activeTab === 'changelog' ? 'primary' : undefined}
+            onClick={() => setActiveTab('changelog')}
+            disabled={tabsBlockedByCapture}
+            title={tabsBlockedByCapture ? 'Stop or cancel current recording/share first.' : undefined}
+          >
+            Changelog
           </button>
         </div>
       </header>
@@ -116,6 +129,9 @@ export function App(): ReactElement {
           <HistoryView
             refreshToken={historyRefreshToken}
           />
+        </section>
+        <section hidden={activeTab !== 'changelog'} aria-hidden={activeTab !== 'changelog'}>
+          <ChangelogView />
         </section>
       </main>
     </div>

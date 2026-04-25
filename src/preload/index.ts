@@ -30,7 +30,8 @@ const api: IpcApi = {
   submitDisplayMediaPick: (sourceId: string | null) => {
     ipcRenderer.send(DISPLAY_MEDIA_SUBMIT, sourceId)
   },
-  synthesizeTemplateParagraph: (input) => ipcRenderer.invoke('tna:synthesize-template-paragraph', input)
+  synthesizeTemplateParagraph: (input) => ipcRenderer.invoke('tna:synthesize-template-paragraph', input),
+  getChangelog: () => ipcRenderer.invoke('tna:get-changelog')
 }
 
 contextBridge.exposeInMainWorld('api', api)
