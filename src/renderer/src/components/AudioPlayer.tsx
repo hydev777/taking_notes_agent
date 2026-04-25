@@ -10,18 +10,25 @@ export function AudioPlayer(props: { sessionId: string }): ReactElement | null {
     void (async () => {
       setErr(null)
       setUrl(null)
-      const res = await window.api.getSessionAudioBytes(props.sessionId)
-      if (cancelled) {
-        return
+      try {
+        const res = await window.api.getSessionAudioBytes(props.sessionId)
+        if (cancelled) {
+          return
+        }
+        if (!res) {
+          setErr('Audio not found')
+          return
+        }
+        const blob = new Blob([res.data], { type: res.mime })
+        const u = URL.createObjectURL(blob)
+        revoked = u
+        setUrl(u)
+      } catch (e) {
+        if (cancelled) {
+          return
+        }
+        setErr(e instanceof Error ? e.message : 'Failed to load audio')
       }
-      if (!res) {
-        setErr('Audio not found')
-        return
-      }
-      const blob = new Blob([res.data], { type: res.mime })
-      const u = URL.createObjectURL(blob)
-      revoked = u
-      setUrl(u)
     })()
     return () => {
       cancelled = true

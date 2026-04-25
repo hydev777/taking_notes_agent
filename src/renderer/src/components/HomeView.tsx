@@ -6,6 +6,7 @@ import { useRecorder } from '../hooks/useRecorder'
 type Props = {
   onRequireProfile: () => void
   onProcessed: (sessionId: string) => void
+  onCaptureLockChange: (locked: boolean) => void
 }
 
 export function HomeView(props: Props): ReactElement {
@@ -27,6 +28,12 @@ export function HomeView(props: Props): ReactElement {
       setDisplayPickerSources(sources)
     })
   }, [])
+
+  useEffect(() => {
+    const locked = recorder.state.status === 'recording' || displayPickerSources != null
+    props.onCaptureLockChange(locked)
+    return () => props.onCaptureLockChange(false)
+  }, [displayPickerSources, props.onCaptureLockChange, recorder.state.status])
 
   const cancelDisplayPick = useCallback(() => {
     window.api.submitDisplayMediaPick(null)

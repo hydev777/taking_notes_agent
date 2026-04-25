@@ -1,6 +1,6 @@
 import { ipcMain, dialog } from 'electron'
 import { writeFile, copyFile, unlink, readFile } from 'node:fs/promises'
-import { basename, extname, join } from 'node:path'
+import { basename, extname, isAbsolute, resolve, sep } from 'node:path'
 import { v4 as uuidv4 } from 'uuid'
 import type { ProcessCallResult, SessionListItem, SessionRecord } from '../shared/ipc'
 import type { TemplateId } from '../shared/templateId'
@@ -32,6 +32,10 @@ import { getSessionsDir } from './services/paths'
 import { buildValidationWarnings } from './services/validation'
 import { registerDisplayMediaSupport } from './services/displayMedia'
 
+const SAFE_SESSION_ID_RE = /^[A-Za-z0-9_-]{1,80}$/
+const ALLOWED_IMPORT_EXTS = new Set(['.webm', '.wav', '.mp3', '.mpeg', '.m4a', '.ogg'])
+const pendingImportBySession = new Map<string, string>()
+
 function requireApiKey(): string {
   const key = process.env.OPENAI_API_KEY
   if (!key) {
@@ -58,6 +62,35 @@ function applyAgentToPayload(payload: TemplatePayload, agentName: string): Templ
       return _exhaustive
     }
   }
+}
+
+function assertSafeSessionId(sessionId: string): string {
+  const normalized = sessionId.trim()
+  if (!SAFE_SESSION_ID_RE.test(normalized)) {
+    throw new Error('Invalid session id')
+  }
+  return normalized
+}
+
+function assertSafeImportSourcePath(sourcePath: string): { sourcePath: string; extension: string } {
+  const normalized = sourcePath.trim()
+  if (!isAbsolute(normalized)) {
+    throw new Error('Invalid source path')
+  }
+  const extension = extname(normalized).toLowerCase()
+  if (!ALLOWED_IMPORT_EXTS.has(extension)) {
+    throw new Error('Unsupported audio file extension')
+  }
+  return { sourcePath: normalized, extension }
+}
+
+function resolveAudioPathInSessionsDir(dir: string, sessionId: string, extension: string): string {
+  const candidate = resolve(dir, `${sessionId}${extension}`)
+  const root = resolve(dir) + sep
+  if (!candidate.startsWith(root)) {
+    throw new Error('Invalid audio destination path')
+  }
+  return candidate
 }
 
 async function persistProcessedSession(input: {
@@ -241,11 +274,12 @@ export function registerIpcHandlers(): void {
       input: { sessionId: string; audio: ArrayBuffer; mimeType: string; profileName: string }
     ) => {
       const dir = getSessionsDir()
+      const sessionId = assertSafeSessionId(input.sessionId)
       const ext = input.mimeType.includes('webm') ? '.webm' : '.bin'
-      const audioPath = join(dir, `${input.sessionId}${ext}`)
+      const audioPath = resolveAudioPathInSessionsDir(dir, sessionId, ext)
       await writeFile(audioPath, Buffer.from(input.audio))
       return runPipelineOnDiskFile({
-        sessionId: input.sessionId,
+        sessionId,
         audioPath,
         audioMime: input.mimeType,
         filenameForApi: `call${ext}`,
@@ -265,11 +299,13 @@ export function registerIpcHandlers(): void {
       return { canceled: true as const }
     }
     const sessionId = uuidv4()
+    const sourcePath = res.filePaths[0]
+    pendingImportBySession.set(sessionId, sourcePath)
     const profileName = getProfileName() ?? ''
     return {
       canceled: false as const,
       sessionId,
-      sourcePath: res.filePaths[0],
+      sourcePath,
       profileName
     }
   })
@@ -278,10 +314,16 @@ export function registerIpcHandlers(): void {
     'tna:process-imported-file',
     async (_e, input: { sessionId: string; sourcePath: string; profileName: string }) => {
       const dir = getSessionsDir()
-      const ext = extname(input.sourcePath) || '.webm'
-      const audioPath = join(dir, `${input.sessionId}${ext}`)
-      await copyFile(input.sourcePath, audioPath)
-      const lower = ext.toLowerCase()
+      const sessionId = assertSafeSessionId(input.sessionId)
+      const pendingSourcePath = pendingImportBySession.get(sessionId)
+      const safeImport = assertSafeImportSourcePath(input.sourcePath)
+      if (!pendingSourcePath || pendingSourcePath !== safeImport.sourcePath) {
+        throw new Error('Import source path not authorized for this session')
+      }
+      pendingImportBySession.delete(sessionId)
+      const audioPath = resolveAudioPathInSessionsDir(dir, sessionId, safeImport.extension)
+      await copyFile(safeImport.sourcePath, audioPath)
+      const lower = safeImport.extension
       const mime =
         lower === '.mp3' || lower === '.mpeg'
           ? 'audio/mpeg'
@@ -293,10 +335,10 @@ export function registerIpcHandlers(): void {
                 ? 'audio/ogg'
                 : 'audio/webm'
       return runPipelineOnDiskFile({
-        sessionId: input.sessionId,
+        sessionId,
         audioPath,
         audioMime: mime,
-        filenameForApi: basename(input.sourcePath),
+        filenameForApi: basename(safeImport.sourcePath),
         mimeForApi: mime,
         profileName: input.profileName
       })
@@ -315,14 +357,18 @@ export function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('tna:get-session-audio-bytes', async (_e, sessionId: string) => {
-    const row = getSessionRow(sessionId)
-    if (!row) {
+    try {
+      const row = getSessionRow(sessionId)
+      if (!row) {
+        return null
+      }
+      const buf = await readFile(row.audio_path)
+      const mime = row.audio_mime ?? 'audio/webm'
+      const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength)
+      return { mime, data: ab }
+    } catch {
       return null
     }
-    const buf = await readFile(row.audio_path)
-    const mime = row.audio_mime ?? 'audio/webm'
-    const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength)
-    return { mime, data: ab }
   })
 
   ipcMain.handle('tna:send-email', async (_e, sessionId: string) => {

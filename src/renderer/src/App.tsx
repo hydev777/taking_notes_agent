@@ -8,6 +8,7 @@ export function App(): ReactElement {
   const [profileName, setProfileName] = useState<string>('')
   const [activeTab, setActiveTab] = useState<TabKey>('home')
   const [historyRefreshToken, setHistoryRefreshToken] = useState<number>(0)
+  const [homeCaptureLocked, setHomeCaptureLocked] = useState<boolean>(false)
 
   const likelyBrowserNotElectron = useMemo(() => {
     if (typeof window === 'undefined') {
@@ -53,25 +54,42 @@ export function App(): ReactElement {
     return 'Taking Notes Agent'
   }, [activeTab])
 
+  const tabsBlockedByCapture = homeCaptureLocked && activeTab === 'home'
+
   return (
     <div className="layout">
       <header className="topbar">
         <h1>{title}</h1>
         <span className="muted">Profile: {profileName || '—'}</span>
         <div className="row">
-          <button type="button" className={activeTab === 'profile' ? 'primary' : undefined} onClick={() => setActiveTab('profile')}>
+          <button
+            type="button"
+            className={activeTab === 'profile' ? 'primary' : undefined}
+            onClick={() => setActiveTab('profile')}
+            disabled={tabsBlockedByCapture}
+            title={tabsBlockedByCapture ? 'Stop or cancel current recording/share first.' : undefined}
+          >
             Profile
           </button>
           <button type="button" className={activeTab === 'home' ? 'primary' : undefined} onClick={() => setActiveTab('home')}>
             Home
           </button>
-          <button type="button" className={activeTab === 'history' ? 'primary' : undefined} onClick={() => setActiveTab('history')}>
+          <button
+            type="button"
+            className={activeTab === 'history' ? 'primary' : undefined}
+            onClick={() => setActiveTab('history')}
+            disabled={tabsBlockedByCapture}
+            title={tabsBlockedByCapture ? 'Stop or cancel current recording/share first.' : undefined}
+          >
             History
           </button>
         </div>
       </header>
 
       <main>
+        {tabsBlockedByCapture ? (
+          <p className="muted">Capture is active. Stop or cancel recording before leaving Home.</p>
+        ) : null}
         <section hidden={activeTab !== 'profile'} aria-hidden={activeTab !== 'profile'}>
           <ProfileView
             likelyBrowserNotElectron={likelyBrowserNotElectron}
@@ -90,6 +108,7 @@ export function App(): ReactElement {
               setHistoryRefreshToken((t) => t + 1)
               setActiveTab('history')
             }}
+            onCaptureLockChange={setHomeCaptureLocked}
           />
         </section>
 
