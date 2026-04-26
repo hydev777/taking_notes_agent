@@ -27,8 +27,10 @@ export function ProfileView(props: Props): ReactElement {
   }
 
   return (
-    <div className="panel stack" style={{ maxWidth: 520 }}>
-      <h2>Profile</h2>
+    <div className="panel stack profile-card">
+      <div className="panel-header">
+        <h2>Profile</h2>
+      </div>
       <p className="muted">
         Enter your name (operator). It is stored on this PC and attached to each saved session.
       </p>
@@ -39,7 +41,7 @@ export function ProfileView(props: Props): ReactElement {
           <code>window.api</code>.
         </p>
       ) : null}
-      {error ? <p className="warnings">{error}</p> : null}
+      {error ? <p className="error-message">{error}</p> : null}
       <div>
         <label htmlFor="profile-name">Full name</label>
         <input

@@ -48,7 +48,12 @@ export function HomeView(props: Props): ReactElement {
   return (
     <div className="stack">
       <div className="panel stack">
-        <h2>Record call (CTM tab + mic)</h2>
+        <div className="panel-header">
+          <h2>Record call (CTM tab + mic)</h2>
+          {recorder.state.status === 'recording' ? (
+            <span className="status-pill recording">Recording live</span>
+          ) : null}
+        </div>
         <p className="muted">
           Start recording opens a picker: choose the browser window with CTM (or the screen where
           the call plays). On Windows, system audio loopback is mixed with your mic. Recording is
@@ -80,7 +85,7 @@ export function HomeView(props: Props): ReactElement {
           </button>
         </div>
         {busy ? <p className="muted">{busy}</p> : null}
-        {error ? <p className="warnings">{error}</p> : null}
+        {error ? <p className="error-message">{error}</p> : null}
         {recorder.state.status === 'recording' ? (
           <>
             <p className="muted">Recording... stop when the call ends.</p>
@@ -105,7 +110,9 @@ export function HomeView(props: Props): ReactElement {
             className="display-picker-panel panel stack"
             onClick={(e: MouseEvent) => e.stopPropagation()}
           >
-            <h2 id="display-picker-title">Share for recording</h2>
+            <div className="panel-header">
+              <h2 id="display-picker-title">Share for recording</h2>
+            </div>
             <p className="muted">
               Pick the window where the CTM / browser call is playing (or a full screen). Cancel if you changed your
               mind.

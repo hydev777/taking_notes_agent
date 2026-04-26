@@ -63,19 +63,34 @@ export function App(): ReactElement {
   return (
     <div className="layout">
       <header className="topbar">
-        <h1>{title}</h1>
-        <span className="muted">Profile: {profileName || '—'}</span>
-        <div className="row">
+        <div className="topbar-main">
+          <span className="brand">Taking Notes Agent</span>
+          <span className="topbar-meta">{title}</span>
+        </div>
+        <span className="topbar-meta">Operator: {profileName || 'Not set'}</span>
+      </header>
+
+      <div className="workspace-shell">
+        <aside className="sidebar" role="tablist" aria-label="Main Navigation">
+          <p className="sidebar-title">Navigation</p>
           <button
             type="button"
             className={activeTab === 'profile' ? 'primary' : undefined}
             onClick={() => setActiveTab('profile')}
             disabled={tabsBlockedByCapture}
             title={tabsBlockedByCapture ? 'Stop or cancel current recording/share first.' : undefined}
+            role="tab"
+            aria-selected={activeTab === 'profile'}
           >
             Profile
           </button>
-          <button type="button" className={activeTab === 'home' ? 'primary' : undefined} onClick={() => setActiveTab('home')}>
+          <button
+            type="button"
+            className={activeTab === 'home' ? 'primary' : undefined}
+            onClick={() => setActiveTab('home')}
+            role="tab"
+            aria-selected={activeTab === 'home'}
+          >
             Home
           </button>
           <button
@@ -84,6 +99,8 @@ export function App(): ReactElement {
             onClick={() => setActiveTab('history')}
             disabled={tabsBlockedByCapture}
             title={tabsBlockedByCapture ? 'Stop or cancel current recording/share first.' : undefined}
+            role="tab"
+            aria-selected={activeTab === 'history'}
           >
             History
           </button>
@@ -93,47 +110,49 @@ export function App(): ReactElement {
             onClick={() => setActiveTab('changelog')}
             disabled={tabsBlockedByCapture}
             title={tabsBlockedByCapture ? 'Stop or cancel current recording/share first.' : undefined}
+            role="tab"
+            aria-selected={activeTab === 'changelog'}
           >
             Changelog
           </button>
-        </div>
-      </header>
+        </aside>
 
-      <main>
-        {tabsBlockedByCapture ? (
-          <p className="muted">Capture is active. Stop or cancel recording before leaving Home.</p>
-        ) : null}
-        <section hidden={activeTab !== 'profile'} aria-hidden={activeTab !== 'profile'}>
-          <ProfileView
-            likelyBrowserNotElectron={likelyBrowserNotElectron}
-            initialProfileName={profileName}
-            onProfileSaved={(nextName: string) => {
-              setProfileName(nextName)
-              setActiveTab('home')
-            }}
-          />
-        </section>
+        <main>
+          <div className="section-shell stack">
+            {tabsBlockedByCapture ? (
+              <p className="warnings">Capture is active. Stop or cancel recording before leaving Home.</p>
+            ) : null}
+            <section hidden={activeTab !== 'profile'} aria-hidden={activeTab !== 'profile'}>
+              <ProfileView
+                likelyBrowserNotElectron={likelyBrowserNotElectron}
+                initialProfileName={profileName}
+                onProfileSaved={(nextName: string) => {
+                  setProfileName(nextName)
+                  setActiveTab('home')
+                }}
+              />
+            </section>
 
-        <section hidden={activeTab !== 'home'} aria-hidden={activeTab !== 'home'}>
-          <HomeView
-            onRequireProfile={() => setActiveTab('profile')}
-            onProcessed={(_sessionId: string) => {
-              setHistoryRefreshToken((t) => t + 1)
-              setActiveTab('history')
-            }}
-            onCaptureLockChange={setHomeCaptureLocked}
-          />
-        </section>
+            <section hidden={activeTab !== 'home'} aria-hidden={activeTab !== 'home'}>
+              <HomeView
+                onRequireProfile={() => setActiveTab('profile')}
+                onProcessed={(_sessionId: string) => {
+                  setHistoryRefreshToken((t) => t + 1)
+                  setActiveTab('history')
+                }}
+                onCaptureLockChange={setHomeCaptureLocked}
+              />
+            </section>
 
-        <section hidden={activeTab !== 'history'} aria-hidden={activeTab !== 'history'}>
-          <HistoryView
-            refreshToken={historyRefreshToken}
-          />
-        </section>
-        <section hidden={activeTab !== 'changelog'} aria-hidden={activeTab !== 'changelog'}>
-          <ChangelogView />
-        </section>
-      </main>
+            <section hidden={activeTab !== 'history'} aria-hidden={activeTab !== 'history'}>
+              <HistoryView refreshToken={historyRefreshToken} />
+            </section>
+            <section hidden={activeTab !== 'changelog'} aria-hidden={activeTab !== 'changelog'}>
+              <ChangelogView />
+            </section>
+          </div>
+        </main>
+      </div>
     </div>
   )
 }

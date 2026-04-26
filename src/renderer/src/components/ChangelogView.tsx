@@ -47,7 +47,7 @@ export function ChangelogView(): ReactElement {
     return <p className="muted">Loading changelog...</p>
   }
   if (state === 'error') {
-    return <p className="warnings">{error ?? 'Could not load changelog.'}</p>
+    return <p className="error-message">{error ?? 'Could not load changelog.'}</p>
   }
   if (state === 'empty') {
     return <p className="muted">No changelog content yet. Run `/update-changelog` first.</p>
@@ -55,9 +55,11 @@ export function ChangelogView(): ReactElement {
 
   return (
     <div className="panel stack">
-      <h2>Changelog</h2>
+      <div className="panel-header">
+        <h2>Changelog</h2>
+      </div>
       <p className="muted">Generated from commits on `main`.</p>
-      <pre className="transcript-readonly" style={{ whiteSpace: 'pre-wrap' }}>
+      <pre className="transcript-readonly changelog-content">
         {content}
       </pre>
     </div>

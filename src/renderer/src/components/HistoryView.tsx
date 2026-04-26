@@ -182,19 +182,19 @@ export function HistoryView(props: Props): ReactElement {
   return (
     <div className="stack">
       {busy ? <p className="muted">{busy}</p> : null}
-      {error ? <p className="warnings">{error}</p> : null}
+      {error ? <p className="error-message">{error}</p> : null}
 
       {!sessionId ? (
         <ul className="session-list">
           {history.length === 0 ? <p className="muted">No sessions yet.</p> : null}
           {history.map((s) => (
-            <li key={s.id}>
+            <li key={s.id} className="session-row">
               <div>
-                <div>
+                <div className="session-row-title">
                   <strong>{s.clientName}</strong> · {formatHistoryDate(s.endedAt)}
                 </div>
-                <div className="muted">{TEMPLATE_LABELS[s.templateId]}</div>
-                <div className="muted">{s.preview}</div>
+                <div className="session-row-sub">{TEMPLATE_LABELS[s.templateId]}</div>
+                <div className="session-row-sub">{s.preview}</div>
               </div>
               <div className="row">
                 <button type="button" onClick={() => void openSession(s.id)}>
@@ -215,20 +215,26 @@ export function HistoryView(props: Props): ReactElement {
             </button>
           </div>
           <div className="panel stack">
-            <h2>Call audio</h2>
+            <div className="panel-header">
+              <h2>Call audio</h2>
+            </div>
             <AudioPlayer sessionId={sessionId} />
           </div>
 
           <div className="grid-2">
             <div className="panel stack">
-              <h2>Transcript (read-only)</h2>
+              <div className="panel-header">
+                <h2>Transcript (read-only)</h2>
+              </div>
               <div className="transcript-readonly" aria-readonly="true">
                 {transcript}
               </div>
             </div>
 
             <div className="panel stack">
-              <h2>Template ({TEMPLATE_LABELS[templateId]})</h2>
+              <div className="panel-header">
+                <h2>Template ({TEMPLATE_LABELS[templateId]})</h2>
+              </div>
               <div className="row template-view-toggle" role="group" aria-label="Template view">
                 <button
                   type="button"
@@ -270,18 +276,22 @@ export function HistoryView(props: Props): ReactElement {
           </div>
 
           {warnings.length > 0 ? (
-            <div className="panel stack warnings">
-              <h3>Validation checks</h3>
+            <div className="panel stack">
+              <div className="panel-header">
+                <h3>Validation checks</h3>
+              </div>
               <ul>
                 {warnings.map((w) => (
-                  <li key={w}>{w}</li>
+                  <li key={w} className="warnings">{w}</li>
                 ))}
               </ul>
             </div>
           ) : null}
 
           <div className="panel stack">
-            <h2>Email</h2>
+            <div className="panel-header">
+              <h2>Email</h2>
+            </div>
             <p className="muted">
               Sending email from the app is disabled for now. You can copy the template fields or transcript manually.
             </p>

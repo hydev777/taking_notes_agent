@@ -12,7 +12,7 @@ export function TemplateEditor(props: {
   return (
     <div className="field-grid">
       {fields.map((f) => (
-        <div key={f.key}>
+        <div key={f.key} className="field-item">
           <label htmlFor={`f-${f.key}`}>{f.label}</label>
           {f.key === 'comments' ||
           f.key === 'commentsOrIssues' ||

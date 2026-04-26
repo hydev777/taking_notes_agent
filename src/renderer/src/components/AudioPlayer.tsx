@@ -39,10 +39,10 @@ export function AudioPlayer(props: { sessionId: string }): ReactElement | null {
   }, [props.sessionId])
 
   if (err) {
-    return <p className="muted">{err}</p>
+    return <p className="error-message">{err}</p>
   }
   if (!url) {
     return <p className="muted">Loading audio…</p>
   }
-  return <audio controls src={url} style={{ width: '100%' }} />
+  return <audio controls src={url} className="audio-player" />
 }
