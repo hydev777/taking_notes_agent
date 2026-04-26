@@ -52,36 +52,20 @@ export const uberRequestSchema = z.object({
   agent: str()
 })
 
-export const detailedNarrativeSchema = z.object({
-  who: str(),
-  phoneNumber: str(),
-  what: str(),
-  when: str(),
-  where: str(),
-  why: str(),
-  how: str(),
-  consequences: str(),
-  nextSteps: str(),
-  additionalNotes: str()
-})
-
 export const templateDataById = {
   generalNewClients: generalNewClientsSchema,
   lemonLaw: lemonLawSchema,
-  uberRequest: uberRequestSchema,
-  detailedNarrative: detailedNarrativeSchema
+  uberRequest: uberRequestSchema
 } satisfies Record<TemplateId, z.ZodTypeAny>
 
 export type GeneralNewClients = z.infer<typeof generalNewClientsSchema>
 export type LemonLaw = z.infer<typeof lemonLawSchema>
 export type UberRequest = z.infer<typeof uberRequestSchema>
-export type DetailedNarrative = z.infer<typeof detailedNarrativeSchema>
 
 export type TemplatePayload =
   | { templateId: 'generalNewClients'; data: GeneralNewClients }
   | { templateId: 'lemonLaw'; data: LemonLaw }
   | { templateId: 'uberRequest'; data: UberRequest }
-  | { templateId: 'detailedNarrative'; data: DetailedNarrative }
 
 export function validateTemplateData(id: TemplateId, data: unknown): TemplatePayload {
   const schema = templateDataById[id]

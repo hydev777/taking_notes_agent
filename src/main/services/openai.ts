@@ -58,7 +58,7 @@ async function fetchWithTimeout(
 const SYSTEM_PROMPT = `You are an intake note assistant for a US law firm answering service (DTLA-style).
 You receive an English call transcript. Output ONLY valid JSON (no markdown) matching this shape:
 {
-  "templateId": one of "generalNewClients" | "lemonLaw" | "uberRequest" | "detailedNarrative",
+  "templateId": one of "generalNewClients" | "lemonLaw" | "uberRequest",
   "data": { ... }
 }
 
@@ -67,7 +67,6 @@ Rules:
 - Use "lemonLaw" when the matter is clearly a defective vehicle / lemon law.
 - Use "uberRequest" when the caller is requesting or describing an Uber/trip/ride pickup-dropoff style request.
 - Use "generalNewClients" for typical new client intake that matches general fields.
-- Use "detailedNarrative" when the situation is complex and does not fit the other three; fill who/what/when/where/why/how/consequences/nextSteps/additionalNotes from the transcript only.
 - For generalNewClients, use data from transcript to fill caseType and comments.
 - If caseType indicates Wrongful Termination, comments MUST include: company/workplace exact name, reason of termination, salary, and time with company/workplace.
 - If caseType indicates Injury/Accidents/Assault/Slip and fall, comments MUST include: when, where, how, police report YES/NO, and injury details.
@@ -82,9 +81,6 @@ name, caseType (default "Lemon Law"), office ("DTLA"), phoneNumber, city, date, 
 
 uberRequest:
 client, phoneNumber, time, pickUp, dropOff, comments, agent
-
-detailedNarrative:
-who, phoneNumber, what, when, where, why, how, consequences, nextSteps, additionalNotes
 
 Never invent facts not supported by the transcript. Use empty string when unknown.
 The profile agent name will be provided separately; put it in the "agent" field when applicable.`
@@ -231,6 +227,6 @@ export async function synthesizeTemplateContextParagraph(params: {
 }
 
 export function coerceTemplateId(id: string): TemplateId | null {
-  const allowed: TemplateId[] = ['generalNewClients', 'lemonLaw', 'uberRequest', 'detailedNarrative']
+  const allowed: TemplateId[] = ['generalNewClients', 'lemonLaw', 'uberRequest']
   return allowed.includes(id as TemplateId) ? (id as TemplateId) : null
 }

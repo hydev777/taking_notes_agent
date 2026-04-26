@@ -55,8 +55,6 @@ function applyAgentToPayload(payload: TemplatePayload, agentName: string): Templ
       return { templateId: payload.templateId, data: { ...payload.data, agent: agentName } }
     case 'uberRequest':
       return { templateId: payload.templateId, data: { ...payload.data, agent: agentName } }
-    case 'detailedNarrative':
-      return payload
     default: {
       const _exhaustive: never = payload
       return _exhaustive
@@ -91,6 +89,18 @@ function resolveAudioPathInSessionsDir(dir: string, sessionId: string, extension
     throw new Error('Invalid audio destination path')
   }
   return candidate
+}
+
+function normalizeTemplateId(raw: string): TemplateId {
+  if (raw === 'detailedNarrative') {
+    // Backward compatibility for historical rows persisted before template removal.
+    return 'generalNewClients'
+  }
+  const parsed = templateIdSchema.safeParse(raw)
+  if (parsed.success) {
+    return parsed.data
+  }
+  return 'generalNewClients'
 }
 
 function appendGeneratedComments(existing: string, generated: string, categoryLabel: string | null): string {
@@ -202,7 +212,7 @@ function rowToListItem(row: DbSessionListRowLight): SessionListItem {
     }
   })()
   const clientName = candidateFromTemplate || 'Unknown client'
-  const templateId = templateIdSchema.parse(row.template_id)
+  const templateId = normalizeTemplateId(row.template_id)
   return {
     id: row.id,
     endedAt: row.ended_at,
@@ -215,7 +225,7 @@ function rowToListItem(row: DbSessionListRowLight): SessionListItem {
 }
 
 function rowToRecord(row: DbSessionRow): SessionRecord {
-  const templateId = templateIdSchema.parse(row.template_id)
+  const templateId = normalizeTemplateId(row.template_id)
   return {
     id: row.id,
     endedAt: row.ended_at,
@@ -415,7 +425,7 @@ export function registerIpcHandlers(): void {
     if (!row) {
       return { error: 'Session not found' }
     }
-    const templateId = templateIdSchema.parse(row.template_id)
+    const templateId = normalizeTemplateId(row.template_id)
     const data: unknown = JSON.parse(row.template_json) as unknown
     const payload = validateTemplateData(templateId, data)
     return buildEmailPreview({ templateId, payload, sessionId })
@@ -445,7 +455,7 @@ export function registerIpcHandlers(): void {
     if (!row) {
       return { ok: false as const, error: 'Session not found' }
     }
-    const templateId = templateIdSchema.parse(row.template_id)
+    const templateId = normalizeTemplateId(row.template_id)
     const data: unknown = JSON.parse(row.template_json) as unknown
     const payload = validateTemplateData(templateId, data)
     const preview = buildEmailPreview({ templateId, payload, sessionId })

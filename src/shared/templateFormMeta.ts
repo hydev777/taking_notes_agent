@@ -48,24 +48,10 @@ const uber: FieldMeta[] = [
   { key: 'agent', label: 'Agent' }
 ]
 
-const detailed: FieldMeta[] = [
-  { key: 'who', label: 'Who' },
-  { key: 'phoneNumber', label: 'Phone Number' },
-  { key: 'what', label: 'What' },
-  { key: 'when', label: 'When' },
-  { key: 'where', label: 'Where' },
-  { key: 'why', label: 'Why' },
-  { key: 'how', label: 'How' },
-  { key: 'consequences', label: 'Consequences' },
-  { key: 'nextSteps', label: 'Next steps' },
-  { key: 'additionalNotes', label: 'Additional notes' }
-]
-
 export const fieldsByTemplateId: Record<TemplateId, FieldMeta[]> = {
   generalNewClients: general,
   lemonLaw: lemon,
-  uberRequest: uber,
-  detailedNarrative: detailed
+  uberRequest: uber
 }
 
 /** One readable paragraph: non-empty fields in order as `Label: value.` segments joined by spaces. */

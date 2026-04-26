@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } 
 import type { SessionListItem } from '@shared/ipc'
 import { TEMPLATE_LABELS } from '@shared/templateId'
 import type { TemplateId } from '@shared/templateId'
-import { formatTemplateAsParagraph } from '@shared/templateFormMeta'
 import { AudioPlayer } from './AudioPlayer'
 import { TemplateEditor } from './TemplateEditor'
 import { useHistoryActions } from '../hooks/useHistoryActions'
@@ -12,7 +11,6 @@ type Props = {
 }
 
 type TemplatePanelMode = 'fields' | 'full'
-type LlmParagraphStatus = 'idle' | 'loading' | 'ready' | 'error'
 
 const historyDateFormatter = new Intl.DateTimeFormat('es-DO', {
   dateStyle: 'medium',
@@ -27,6 +25,78 @@ function formatHistoryDate(value: string): string {
   return historyDateFormatter.format(d)
 }
 
+function cleanValue(value: string | undefined): string {
+  return (value ?? '').trim()
+}
+
+function pick(data: Record<string, string>, ...keys: string[]): string {
+  for (const key of keys) {
+    const value = cleanValue(data[key])
+    if (value.length > 0) {
+      return value
+    }
+  }
+  return ''
+}
+
+function buildFullParagraph(templateId: TemplateId, templateData: Record<string, string>): string {
+  if (templateId === 'lemonLaw') {
+    return [
+      'Lemon Law',
+      '',
+      `Name: ${pick(templateData, 'name')}`,
+      'Case Type: Lemon Law',
+      'Office: DTLA',
+      `Phone Number: ${pick(templateData, 'phoneNumber')}`,
+      `City: ${pick(templateData, 'city')}`,
+      `Date: ${pick(templateData, 'date')}`,
+      `Email: ${pick(templateData, 'email')}`,
+      `Car Year Make Model: ${pick(templateData, 'carYearMakeModel')}`,
+      `Year of purchase: ${pick(templateData, 'yearOfPurchase')}`,
+      `Where did you buy it, leased or purchased?: ${pick(templateData, 'whereBoughtLeasedOrPurchased')}`,
+      `New or Used: ${pick(templateData, 'newOrUsed')}`,
+      `Mileage the/now: ${pick(templateData, 'mileageThenOrNow')}`,
+      `Comments/Issues: ${pick(templateData, 'commentsOrIssues')}`,
+      `  How many times have you taken the car to the repair shop: ${pick(templateData, 'repairShopVisitsCount')}`,
+      `  When does the warranty end: ${pick(templateData, 'warrantyEnd')}`,
+      `  How did you hear about us? ${pick(templateData, 'howDidYouHearAboutUs')}`,
+      `  Schedule Call Back: ${pick(templateData, 'scheduleCallBack')}`,
+      'Agent: Wilson Toribio'
+    ].join('\n')
+  }
+
+  if (templateId === 'uberRequest') {
+    return [
+      'Uber Request Template',
+      '',
+      `Client: ${pick(templateData, 'client', 'name')}`,
+      `Phone Number: ${pick(templateData, 'phoneNumber')}`,
+      `Time: ${pick(templateData, 'time')}`,
+      `Pick up: ${pick(templateData, 'pickUp')}`,
+      `Drop off: ${pick(templateData, 'dropOff')}`,
+      `Comments: ${pick(templateData, 'comments')}`,
+      'Agent: Wilson Toribio'
+    ].join('\n')
+  }
+
+  return [
+    'General template for new clients',
+    '',
+    `Name: ${pick(templateData, 'name', 'client', 'who')}`,
+    `Case Type: ${pick(templateData, 'caseType')}`,
+    'Office: DTLA',
+    'Signed: Pending',
+    `City: ${pick(templateData, 'city')}`,
+    `Date: ${pick(templateData, 'date')}`,
+    `Phone Number: ${pick(templateData, 'phoneNumber')}`,
+    `Email: ${pick(templateData, 'email')}`,
+    `Comments: ${pick(templateData, 'comments')}`,
+    `  How did you hear about us? ${pick(templateData, 'howDidYouHearAboutUs')}`,
+    '  Schedule  Call Back: anytime',
+    'Agent: Wilson Toribio'
+  ].join('\n')
+}
+
 export function HistoryView(props: Props): ReactElement {
   const [history, setHistory] = useState<SessionListItem[]>([])
   const [busy, setBusy] = useState<string | null>(null)
@@ -38,19 +108,13 @@ export function HistoryView(props: Props): ReactElement {
   const [templateData, setTemplateData] = useState<Record<string, string>>({})
   const [warnings, setWarnings] = useState<string[]>([])
   const [templatePanelMode, setTemplatePanelMode] = useState<TemplatePanelMode>('fields')
-  const [llmParagraph, setLlmParagraph] = useState<string | null>(null)
-  const [llmParagraphStatus, setLlmParagraphStatus] = useState<LlmParagraphStatus>('idle')
   const templateJson = useMemo(() => JSON.stringify(templateData), [templateData])
   const lastSavedTemplateJsonRef = useRef<string | null>(null)
 
-  const fallbackParagraph = useMemo(
-    () => formatTemplateAsParagraph(templateId, templateData),
+  const displayedTemplateParagraph = useMemo(
+    () => buildFullParagraph(templateId, templateData),
     [templateId, templateData]
   )
-  const displayedTemplateParagraph =
-    llmParagraphStatus === 'ready' && llmParagraph != null && llmParagraph.length > 0
-      ? llmParagraph
-      : fallbackParagraph
 
   const { loadHistory, openSession, deleteSession } = useHistoryActions({
     onError: setError,
@@ -100,29 +164,6 @@ export function HistoryView(props: Props): ReactElement {
     }, 800)
     return () => window.clearTimeout(t)
   }, [sessionId, templateId, templateJson])
-
-  useEffect(() => {
-    setLlmParagraph(null)
-    setLlmParagraphStatus('idle')
-  }, [templateId, templateData, transcript, sessionId])
-
-  const generateLlmParagraph = useCallback(async () => {
-    setLlmParagraphStatus('loading')
-    setError(null)
-    const res = await window.api.synthesizeTemplateParagraph({
-      templateId,
-      templateJson,
-      transcript
-    })
-    if (!res.ok) {
-      setLlmParagraph(null)
-      setLlmParagraphStatus('error')
-      setError(res.error)
-      return
-    }
-    setLlmParagraph(res.paragraph)
-    setLlmParagraphStatus('ready')
-  }, [templateId, templateJson, transcript])
 
   const copyTemplateParagraph = useCallback(async () => {
     setError(null)
@@ -208,12 +249,6 @@ export function HistoryView(props: Props): ReactElement {
                 <TemplateEditor templateId={templateId} data={templateData} onChange={setTemplateData} />
               ) : (
                 <div className="template-paragraph-wrap stack">
-                  <p className="muted">
-                    Simple join of filled fields is shown by default. Use{' '}
-                    <strong>Generate with AI</strong> for one contextual paragraph (cheap model; uses transcript +
-                    fields).
-                  </p>
-                  {llmParagraphStatus === 'loading' ? <p className="muted">Generating summary…</p> : null}
                   <textarea
                     className="template-paragraph-textarea"
                     readOnly
@@ -223,15 +258,7 @@ export function HistoryView(props: Props): ReactElement {
                   <div className="row">
                     <button
                       type="button"
-                      className="primary"
-                      disabled={llmParagraphStatus === 'loading' || !!busy}
-                      onClick={() => void generateLlmParagraph()}
-                    >
-                      Generate with AI
-                    </button>
-                    <button
-                      type="button"
-                      disabled={llmParagraphStatus === 'loading' || !!busy}
+                      disabled={!!busy}
                       onClick={() => void copyTemplateParagraph()}
                     >
                       Copy all
