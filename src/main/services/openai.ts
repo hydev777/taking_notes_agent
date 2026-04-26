@@ -68,6 +68,11 @@ Rules:
 - Use "uberRequest" when the caller is requesting or describing an Uber/trip/ride pickup-dropoff style request.
 - Use "generalNewClients" for typical new client intake that matches general fields.
 - Use "detailedNarrative" when the situation is complex and does not fit the other three; fill who/what/when/where/why/how/consequences/nextSteps/additionalNotes from the transcript only.
+- For generalNewClients, use data from transcript to fill caseType and comments.
+- If caseType indicates Wrongful Termination, comments MUST include: company/workplace exact name, reason of termination, salary, and time with company/workplace.
+- If caseType indicates Injury/Accidents/Assault/Slip and fall, comments MUST include: when, where, how, police report YES/NO, and injury details.
+- If caseType indicates Workers' Comp Injury (employee injured in company and seeking compensation), comments MUST include: company/workplace exact name, when, how, and injury details.
+- If caseType does not match those three categories, comments should still provide a rich open summary (what happened, how, why/context, key details).
 
 Field keys for generalNewClients (all strings, empty if unknown):
 name, phoneNumber, caseType, office (default "DTLA"), signed (default "Pending"), city, date, email, comments, howDidYouHearAboutUs, scheduleCallBack, agent

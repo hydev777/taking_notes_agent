@@ -29,7 +29,7 @@ import {
   transcribeAudioFile
 } from './services/openai'
 import { getSessionsDir } from './services/paths'
-import { buildValidationWarnings } from './services/validation'
+import { buildValidationWarnings, detectCaseCategory } from './services/validation'
 import { registerDisplayMediaSupport } from './services/displayMedia'
 
 const SAFE_SESSION_ID_RE = /^[A-Za-z0-9_-]{1,80}$/
@@ -93,6 +93,22 @@ function resolveAudioPathInSessionsDir(dir: string, sessionId: string, extension
   return candidate
 }
 
+function appendGeneratedComments(existing: string, generated: string, categoryLabel: string | null): string {
+  const base = existing.trim()
+  const next = generated.trim()
+  if (!next) {
+    return base
+  }
+  if (!base) {
+    return next
+  }
+  if (base === next || base.includes(next)) {
+    return base
+  }
+  const title = categoryLabel ? `AI category notes (${categoryLabel})` : 'AI category notes'
+  return `${base}\n\n---\n${title}\n${next}`
+}
+
 async function persistProcessedSession(input: {
   sessionId: string
   profileName: string
@@ -134,9 +150,29 @@ async function runPipelineOnDiskFile(input: {
     apiKey
   })
   payload = applyAgentToPayload(payload, input.profileName)
+  if (payload.templateId === 'generalNewClients') {
+    const category = detectCaseCategory(payload.data.caseType ?? '')
+    const categoryLabel =
+      category === 'wrongfulTermination'
+        ? 'Wrongful Termination'
+        : category === 'injuryAccidentAssaultSlipFall'
+          ? 'Injury/Accidents/Assault/Slip and fall'
+          : category === 'workersCompInjury'
+            ? "Workers' Comp Injury"
+            : null
+    payload = {
+      templateId: payload.templateId,
+      data: {
+        ...payload.data,
+        comments: appendGeneratedComments('', payload.data.comments ?? '', categoryLabel)
+      }
+    }
+  }
   const validationWarnings = buildValidationWarnings({
     transcript,
-    templateId: payload.templateId
+    templateId: payload.templateId,
+    caseType: payload.templateId === 'generalNewClients' ? payload.data.caseType : '',
+    comments: payload.templateId === 'generalNewClients' ? payload.data.comments : ''
   })
   await persistProcessedSession({
     sessionId: input.sessionId,
