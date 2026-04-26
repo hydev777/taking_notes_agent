@@ -88,6 +88,8 @@ export type DbSessionListRowLight = {
   profile_name: string
   audio_path: string
   template_id: string
+  template_json: string
+  transcript: string
   preview: string
 }
 
@@ -149,6 +151,8 @@ export function listSessionRowsLight(): DbSessionListRowLight[] {
         profile_name,
         audio_path,
         template_id,
+        template_json,
+        transcript,
         CASE
           WHEN length(trim(replace(replace(replace(transcript, char(10), ' '), char(13), ' '), char(9), ' '))) <= 100
             THEN trim(replace(replace(replace(transcript, char(10), ' '), char(13), ' '), char(9), ' '))

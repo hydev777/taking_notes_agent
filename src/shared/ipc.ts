@@ -5,6 +5,7 @@ export type SessionListItem = {
   id: string
   endedAt: string
   profileName: string
+  clientName: string
   templateId: TemplateId
   preview: string
   audioPath: string

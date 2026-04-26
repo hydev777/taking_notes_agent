@@ -150,7 +150,7 @@ export function HistoryView(props: Props): ReactElement {
             <li key={s.id}>
               <div>
                 <div>
-                  <strong>{formatHistoryDate(s.endedAt)}</strong> · {s.profileName}
+                  <strong>{s.clientName}</strong> · {formatHistoryDate(s.endedAt)}
                 </div>
                 <div className="muted">{TEMPLATE_LABELS[s.templateId]}</div>
                 <div className="muted">{s.preview}</div>

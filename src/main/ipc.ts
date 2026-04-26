@@ -186,11 +186,28 @@ async function runPipelineOnDiskFile(input: {
 }
 
 function rowToListItem(row: DbSessionListRowLight): SessionListItem {
+  const candidateFromTemplate = (() => {
+    try {
+      const parsed = JSON.parse(row.template_json) as Record<string, unknown>
+      const direct = [parsed.name, parsed.client, parsed.who]
+      for (const value of direct) {
+        const text = value == null ? '' : String(value).trim()
+        if (text.length > 0) {
+          return text
+        }
+      }
+      return ''
+    } catch {
+      return ''
+    }
+  })()
+  const clientName = candidateFromTemplate || 'Unknown client'
   const templateId = templateIdSchema.parse(row.template_id)
   return {
     id: row.id,
     endedAt: row.ended_at,
     profileName: row.profile_name,
+    clientName,
     templateId,
     preview: row.preview,
     audioPath: row.audio_path
