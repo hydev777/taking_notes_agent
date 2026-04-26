@@ -16,6 +16,20 @@ Electron desktop app for **CTM-style calls**: capture **browser tab audio + micr
   - deterministic **Full paragraph** output format
 - Changelog tab in-app (reads `CHANGELOG.md`)
 
+## Visual demo
+
+### Home - AI Processing Console
+
+![Home AI Processing Console](docs/images/home-ai-console.svg)
+
+### History - Transcript + Template Workspace
+
+![History Workspace](docs/images/history-workspace.svg)
+
+### Changelog Tab
+
+![Changelog Tab](docs/images/changelog-tab.svg)
+
 ## Templates
 
 The app currently supports **3 templates**:

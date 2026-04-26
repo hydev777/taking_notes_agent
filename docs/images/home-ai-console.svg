@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="860" viewBox="0 0 1400 860">
+  <rect width="1400" height="860" fill="#f7f9fb"/>
+  <rect x="0" y="0" width="1400" height="54" fill="#ffffff" stroke="#c5c5d3"/>
+  <text x="24" y="34" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="700" fill="#00236f">Taking Notes Agent AI</text>
+  <text x="1210" y="34" font-family="Inter, Arial, sans-serif" font-size="13" fill="#444651">Operator + AI: Wilson</text>
+
+  <rect x="0" y="54" width="220" height="806" fill="#f8fafc" stroke="#c5c5d3"/>
+  <text x="20" y="86" font-family="Inter, Arial, sans-serif" font-size="11" font-weight="700" fill="#57657a">NAVIGATION</text>
+  <rect x="10" y="106" width="200" height="36" fill="#ffffff" stroke="#00236f"/>
+  <text x="26" y="129" font-family="Inter, Arial, sans-serif" font-size="13" fill="#00236f">Home</text>
+  <rect x="10" y="148" width="200" height="36" fill="none" stroke="#c5c5d3"/>
+  <text x="26" y="171" font-family="Inter, Arial, sans-serif" font-size="13" fill="#444651">History</text>
+  <rect x="10" y="190" width="200" height="36" fill="none" stroke="#c5c5d3"/>
+  <text x="26" y="213" font-family="Inter, Arial, sans-serif" font-size="13" fill="#444651">Changelog</text>
+
+  <rect x="248" y="86" width="1120" height="720" rx="4" fill="#ffffff" stroke="#c5c5d3"/>
+  <text x="270" y="120" font-family="Inter, Arial, sans-serif" font-size="22" font-weight="600" fill="#191c1e">AI Call Assistant (CTM tab + mic)</text>
+  <text x="270" y="145" font-family="Inter, Arial, sans-serif" font-size="13" fill="#57657a">The assistant captures, transcribes, structures and validates each intake session.</text>
+
+  <rect x="270" y="168" width="150" height="34" rx="4" fill="#00236f"/>
+  <text x="292" y="190" font-family="Inter, Arial, sans-serif" font-size="13" fill="#ffffff">Start recording</text>
+  <rect x="430" y="168" width="140" height="34" rx="4" fill="#ffffff" stroke="#c5c5d3"/>
+  <text x="456" y="190" font-family="Inter, Arial, sans-serif" font-size="13" fill="#191c1e">Stop &amp; process</text>
+  <rect x="580" y="168" width="150" height="34" rx="4" fill="#ffffff" stroke="#c5c5d3"/>
+  <text x="604" y="190" font-family="Inter, Arial, sans-serif" font-size="13" fill="#191c1e">Stop (No process)</text>
+
+  <rect x="270" y="224" width="1090" height="250" rx="4" fill="#f8fbff" stroke="#c5c5d3"/>
+  <text x="290" y="255" font-family="Inter, Arial, sans-serif" font-size="12" font-weight="700" fill="#00236f">AI PROCESSING CONSOLE</text>
+
+  <circle cx="302" cy="290" r="8" fill="#bbf7d0" stroke="#16a34a"/>
+  <text x="322" y="295" font-family="Inter, Arial, sans-serif" font-size="14" fill="#166534">Listening</text>
+  <circle cx="302" cy="326" r="8" fill="#bfdbfe" stroke="#00236f"/>
+  <text x="322" y="331" font-family="Inter, Arial, sans-serif" font-size="14" fill="#00236f" font-weight="600">Transcribing</text>
+  <circle cx="302" cy="362" r="8" fill="#ffffff" stroke="#757682"/>
+  <text x="322" y="367" font-family="Inter, Arial, sans-serif" font-size="14" fill="#444651">Structuring Template</text>
+  <circle cx="302" cy="398" r="8" fill="#ffffff" stroke="#757682"/>
+  <text x="322" y="403" font-family="Inter, Arial, sans-serif" font-size="14" fill="#444651">Validating</text>
+  <circle cx="302" cy="434" r="8" fill="#ffffff" stroke="#757682"/>
+  <text x="322" y="439" font-family="Inter, Arial, sans-serif" font-size="14" fill="#444651">Ready</text>
+
+  <rect x="270" y="494" width="1090" height="92" rx="4" fill="#f8fbff" stroke="#c5c5d3"/>
+  <text x="290" y="524" font-family="Inter, Arial, sans-serif" font-size="12" font-weight="700" fill="#00236f">NEXT STEP GUIDANCE</text>
+  <text x="290" y="548" font-family="Inter, Arial, sans-serif" font-size="13" fill="#57657a">Once processing completes, open History to review transcript, verify fields, and copy the final template output.</text>
+</svg>

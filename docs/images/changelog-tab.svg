@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="860" viewBox="0 0 1400 860">
+  <rect width="1400" height="860" fill="#f7f9fb"/>
+  <rect x="0" y="0" width="1400" height="54" fill="#ffffff" stroke="#c5c5d3"/>
+  <text x="24" y="34" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="700" fill="#00236f">Taking Notes Agent AI</text>
+  <rect x="0" y="54" width="220" height="806" fill="#f8fafc" stroke="#c5c5d3"/>
+  <rect x="10" y="190" width="200" height="36" fill="#ffffff" stroke="#00236f"/>
+  <text x="26" y="213" font-family="Inter, Arial, sans-serif" font-size="13" fill="#00236f">Changelog</text>
+
+  <rect x="248" y="86" width="1120" height="740" rx="4" fill="#ffffff" stroke="#c5c5d3"/>
+  <text x="270" y="120" font-family="Inter, Arial, sans-serif" font-size="22" font-weight="600" fill="#191c1e">Changelog</text>
+  <text x="270" y="145" font-family="Inter, Arial, sans-serif" font-size="13" fill="#57657a">Generated from commits on main.</text>
+
+  <rect x="270" y="168" width="1076" height="636" fill="#ffffff" stroke="#c5c5d3"/>
+  <text x="292" y="202" font-family="monospace" font-size="14" fill="#191c1e">## [v0.1.5] - 2026-04-26</text>
+  <text x="292" y="230" font-family="monospace" font-size="13" fill="#191c1e">### Summary</text>
+  <text x="292" y="252" font-family="monospace" font-size="13" fill="#191c1e">- Released v0.1.5 with 15 changes.</text>
+  <text x="292" y="274" font-family="monospace" font-size="13" fill="#191c1e">- Changed: 1 item(s).</text>
+  <text x="292" y="296" font-family="monospace" font-size="13" fill="#191c1e">- Chore: 14 item(s).</text>
+  <text x="292" y="328" font-family="monospace" font-size="13" fill="#191c1e">### Changed</text>
+  <text x="292" y="350" font-family="monospace" font-size="13" fill="#191c1e">- first commit (ad1ccaf)</text>
+  <text x="292" y="382" font-family="monospace" font-size="13" fill="#191c1e">### Chore</text>
+  <text x="292" y="404" font-family="monospace" font-size="13" fill="#191c1e">- AI structure change (f347787)</text>
+  <text x="292" y="426" font-family="monospace" font-size="13" fill="#191c1e">- chore changed ui ux design (3865a5d)</text>
+  <text x="292" y="448" font-family="monospace" font-size="13" fill="#191c1e">- ...</text>
+  <text x="292" y="500" font-family="monospace" font-size="14" fill="#191c1e">## [v0.1.4] - 2026-04-26</text>
+  <text x="292" y="528" font-family="monospace" font-size="13" fill="#191c1e">### Summary</text>
+  <text x="292" y="550" font-family="monospace" font-size="13" fill="#191c1e">- Released v0.1.4 with 11 changes.</text>
+</svg>
