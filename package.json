@@ -1,6 +1,6 @@
 {
   "name": "taking-notes-agent",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Desktop agent for CTM call notes: record, transcribe, template, email",
   "main": "out/main/index.js",
   "type": "module",
