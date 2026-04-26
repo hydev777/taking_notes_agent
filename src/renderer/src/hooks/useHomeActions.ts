@@ -16,9 +16,11 @@ export function useHomeActions(params: Params): {
   stopRecording: () => Promise<void>
   stopWithoutProcessing: () => void
 } {
+  const sleep = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms))
+
   const startRecording = useCallback(async () => {
     params.onError(null)
-    params.onBusyMessage('Processing audio (transcription + notes)…')
+    params.onBusyMessage('AI assistant is checking profile and preparing capture...')
     try {
       const n = (await window.api.getProfileName())?.trim() ?? ''
       if (!n) {
@@ -36,12 +38,13 @@ export function useHomeActions(params: Params): {
 
   const stopRecording = useCallback(async () => {
     params.onError(null)
-    params.onBusyMessage('Processing audio (transcription + notes)…')
+    params.onBusyMessage('AI assistant is preparing audio for transcription...')
     try {
       const chunks = await params.recorder.stop()
       if (!chunks) {
         return
       }
+      params.onBusyMessage('AI assistant is transcribing the call...')
       const n = (await window.api.getProfileName())?.trim() ?? ''
       const buf = await chunks.blob.arrayBuffer()
       const res = await window.api.processCallAudio({
@@ -51,6 +54,10 @@ export function useHomeActions(params: Params): {
         profileName: n
       })
       void res
+      params.onBusyMessage('AI assistant is structuring template fields...')
+      await sleep(220)
+      params.onBusyMessage('AI assistant is validating key details...')
+      await sleep(220)
       params.onProcessed(chunks.sessionId)
     } catch (e) {
       params.onError(e instanceof Error ? e.message : String(e))
@@ -66,7 +73,7 @@ export function useHomeActions(params: Params): {
       if (!stopped) {
         return
       }
-      params.onBusyMessage('Recording discarded.')
+      params.onBusyMessage('AI assistant stopped. Recording discarded.')
       window.setTimeout(() => params.onBusyMessage(null), 1600)
     })()
   }, [params])

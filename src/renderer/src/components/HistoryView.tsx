@@ -8,6 +8,7 @@ import { useHistoryActions } from '../hooks/useHistoryActions'
 
 type Props = {
   refreshToken: number
+  latestProcessedSessionId?: string | null
 }
 
 type TemplatePanelMode = 'fields' | 'full'
@@ -185,28 +186,39 @@ export function HistoryView(props: Props): ReactElement {
       {error ? <p className="error-message">{error}</p> : null}
 
       {!sessionId ? (
-        <ul className="session-list">
-          {history.length === 0 ? <p className="muted">No sessions yet.</p> : null}
-          {history.map((s) => (
-            <li key={s.id} className="session-row">
-              <div>
-                <div className="session-row-title">
-                  <strong>{s.clientName}</strong> · {formatHistoryDate(s.endedAt)}
+        <div className="stack">
+          {props.latestProcessedSessionId ? (
+            <div className="assistant-hint">
+              <p className="assistant-title">AI assistant update</p>
+              <p className="muted">
+                Your latest call was processed successfully. The AI assistant prepared transcript,
+                template fields, and initial validation checks. Open a session to review and finalize.
+              </p>
+            </div>
+          ) : null}
+          <ul className="session-list">
+            {history.length === 0 ? <p className="muted">No sessions yet.</p> : null}
+            {history.map((s) => (
+              <li key={s.id} className="session-row">
+                <div>
+                  <div className="session-row-title">
+                    <strong>{s.clientName}</strong> · {formatHistoryDate(s.endedAt)}
+                  </div>
+                  <div className="session-row-sub">{TEMPLATE_LABELS[s.templateId]}</div>
+                  <div className="session-row-sub">{s.preview}</div>
                 </div>
-                <div className="session-row-sub">{TEMPLATE_LABELS[s.templateId]}</div>
-                <div className="session-row-sub">{s.preview}</div>
-              </div>
-              <div className="row">
-                <button type="button" onClick={() => void openSession(s.id)}>
-                  Open
-                </button>
-                <button type="button" className="danger" onClick={() => void deleteSession(s.id)}>
-                  Delete
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
+                <div className="row">
+                  <button type="button" onClick={() => void openSession(s.id)}>
+                    Open
+                  </button>
+                  <button type="button" className="danger" onClick={() => void deleteSession(s.id)}>
+                    Delete
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
       ) : (
         <div className="stack">
           <div className="row">
@@ -226,6 +238,9 @@ export function HistoryView(props: Props): ReactElement {
               <div className="panel-header">
                 <h2>Transcript (read-only)</h2>
               </div>
+              <p className="muted">
+                AI assistant transcript draft. Review the dialogue and adjust template fields as needed.
+              </p>
               <div className="transcript-readonly" aria-readonly="true">
                 {transcript}
               </div>

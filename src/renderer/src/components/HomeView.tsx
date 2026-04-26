@@ -45,21 +45,76 @@ export function HomeView(props: Props): ReactElement {
     setDisplayPickerSources(null)
   }, [])
 
+  const stageLabels = [
+    'Listening',
+    'Transcribing',
+    'Structuring Template',
+    'Validating',
+    'Ready'
+  ] as const
+
+  const activeStage = (() => {
+    if (error || recorder.state.status === 'error') {
+      return 0
+    }
+    if (recorder.state.status === 'recording') {
+      return 0
+    }
+    if (busy) {
+      if (busy.toLowerCase().includes('validating')) {
+        return 3
+      }
+      if (busy.toLowerCase().includes('structuring')) {
+        return 2
+      }
+      return 1
+    }
+    return 4
+  })()
+
   return (
     <div className="stack">
       <div className="panel stack">
         <div className="panel-header">
-          <h2>Record call (CTM tab + mic)</h2>
+          <h2>AI Call Assistant (CTM tab + mic)</h2>
           {recorder.state.status === 'recording' ? (
             <span className="status-pill recording">Recording live</span>
           ) : null}
         </div>
         <p className="muted">
-          Start recording opens a picker: choose the browser window with CTM (or the screen where
-          the call plays). On Windows, system audio loopback is mixed with your mic. Recording is
-          stored locally and sent to your OpenAI key for transcription. Legal/compliance is your
-          responsibility.
+          Your AI collaborator captures the call, transcribes the conversation, fills structured
+          fields, and prepares the session for review. Choose the call source when prompted. On
+          Windows, system audio loopback is mixed with your mic.
         </p>
+        <div className="assistant-console">
+          <p className="assistant-title">AI Processing Console</p>
+          <ol className="assistant-timeline">
+            {stageLabels.map((label, idx) => {
+              const status = error || recorder.state.status === 'error'
+                ? idx === activeStage
+                  ? 'error'
+                  : idx < activeStage
+                    ? 'done'
+                    : 'todo'
+                : idx < activeStage
+                  ? 'done'
+                  : idx === activeStage
+                    ? 'active'
+                    : 'todo'
+              return (
+                <li key={label} className={`assistant-stage ${status}`}>
+                  <span className="assistant-dot" aria-hidden="true" />
+                  <span>{label}</span>
+                </li>
+              )
+            })}
+          </ol>
+          <p className="muted">
+            {error || recorder.state.status === 'error'
+              ? 'AI assistant needs your attention. Fix the issue and retry.'
+              : busy ?? 'AI assistant is ready. Start recording to begin a new intake run.'}
+          </p>
+        </div>
         <div className="row">
           <button
             type="button"
@@ -83,6 +138,16 @@ export function HomeView(props: Props): ReactElement {
           >
             Stop (No process)
           </button>
+        </div>
+        <div className="assistant-hint">
+          <p className="assistant-title">Next step guidance</p>
+          <p className="muted">
+            {recorder.state.status === 'recording'
+              ? 'Keep recording while the call is active. Then click "Stop & process" so the AI assistant can prepare the intake draft.'
+              : busy
+                ? 'Processing is in progress. Once complete, you will be moved to History to review the AI-generated draft.'
+                : 'After processing, review transcript and template in History. Edit fields, confirm warnings, and copy the final output.'}
+          </p>
         </div>
         {busy ? <p className="muted">{busy}</p> : null}
         {error ? <p className="error-message">{error}</p> : null}

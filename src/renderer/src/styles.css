@@ -481,3 +481,72 @@ main {
 .audio-player {
   width: 100%;
 }
+
+.assistant-console,
+.assistant-hint {
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--radius);
+  background: #f8fbff;
+  padding: var(--space-sm);
+}
+
+.assistant-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--primary);
+}
+
+.assistant-timeline {
+  list-style: none;
+  margin: var(--space-sm) 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-xs);
+}
+
+.assistant-stage {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: 13px;
+  color: var(--on-surface-variant);
+}
+
+.assistant-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  border: 1px solid var(--outline);
+  background: var(--surface);
+}
+
+.assistant-stage.done {
+  color: #166534;
+}
+
+.assistant-stage.done .assistant-dot {
+  border-color: #16a34a;
+  background: #bbf7d0;
+}
+
+.assistant-stage.active {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.assistant-stage.active .assistant-dot {
+  border-color: var(--primary);
+  background: #bfdbfe;
+}
+
+.assistant-stage.error {
+  color: var(--error);
+  font-weight: 600;
+}
+
+.assistant-stage.error .assistant-dot {
+  border-color: var(--error);
+  background: #fecaca;
+}

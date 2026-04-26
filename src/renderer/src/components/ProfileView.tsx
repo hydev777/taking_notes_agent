@@ -32,7 +32,8 @@ export function ProfileView(props: Props): ReactElement {
         <h2>Profile</h2>
       </div>
       <p className="muted">
-        Enter your name (operator). It is stored on this PC and attached to each saved session.
+        Enter your operator name. Your AI collaborator uses this identity while preparing each saved
+        session.
       </p>
       {props.likelyBrowserNotElectron ? (
         <p className="warnings">

@@ -10,6 +10,7 @@ export function App(): ReactElement {
   const [activeTab, setActiveTab] = useState<TabKey>('home')
   const [historyRefreshToken, setHistoryRefreshToken] = useState<number>(0)
   const [homeCaptureLocked, setHomeCaptureLocked] = useState<boolean>(false)
+  const [lastProcessedSessionId, setLastProcessedSessionId] = useState<string | null>(null)
 
   const likelyBrowserNotElectron = useMemo(() => {
     if (typeof window === 'undefined') {
@@ -55,7 +56,7 @@ export function App(): ReactElement {
     if (activeTab === 'changelog') {
       return 'Changelog'
     }
-    return 'Taking Notes Agent'
+    return 'AI collaborator'
   }, [activeTab])
 
   const tabsBlockedByCapture = homeCaptureLocked && activeTab === 'home'
@@ -64,10 +65,10 @@ export function App(): ReactElement {
     <div className="layout">
       <header className="topbar">
         <div className="topbar-main">
-          <span className="brand">Taking Notes Agent</span>
+          <span className="brand">Taking Notes Agent AI</span>
           <span className="topbar-meta">{title}</span>
         </div>
-        <span className="topbar-meta">Operator: {profileName || 'Not set'}</span>
+        <span className="topbar-meta">Operator + AI: {profileName || 'Not set'}</span>
       </header>
 
       <div className="workspace-shell">
@@ -136,7 +137,8 @@ export function App(): ReactElement {
             <section hidden={activeTab !== 'home'} aria-hidden={activeTab !== 'home'}>
               <HomeView
                 onRequireProfile={() => setActiveTab('profile')}
-                onProcessed={(_sessionId: string) => {
+                onProcessed={(sessionId: string) => {
+                  setLastProcessedSessionId(sessionId)
                   setHistoryRefreshToken((t) => t + 1)
                   setActiveTab('history')
                 }}
@@ -145,7 +147,7 @@ export function App(): ReactElement {
             </section>
 
             <section hidden={activeTab !== 'history'} aria-hidden={activeTab !== 'history'}>
-              <HistoryView refreshToken={historyRefreshToken} />
+              <HistoryView refreshToken={historyRefreshToken} latestProcessedSessionId={lastProcessedSessionId} />
             </section>
             <section hidden={activeTab !== 'changelog'} aria-hidden={activeTab !== 'changelog'}>
               <ChangelogView />
