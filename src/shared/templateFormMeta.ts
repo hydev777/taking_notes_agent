@@ -4,6 +4,7 @@ export type FieldMeta = { key: string; label: string }
 
 const general: FieldMeta[] = [
   { key: 'name', label: 'Name' },
+  { key: 'phoneNumber', label: 'Phone Number' },
   { key: 'caseType', label: 'Case Type' },
   { key: 'office', label: 'Office' },
   { key: 'signed', label: 'Signed' },
@@ -49,6 +50,7 @@ const uber: FieldMeta[] = [
 
 const detailed: FieldMeta[] = [
   { key: 'who', label: 'Who' },
+  { key: 'phoneNumber', label: 'Phone Number' },
   { key: 'what', label: 'What' },
   { key: 'when', label: 'When' },
   { key: 'where', label: 'Where' },

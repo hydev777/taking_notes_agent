@@ -8,6 +8,7 @@ const str = () =>
 
 export const generalNewClientsSchema = z.object({
   name: str(),
+  phoneNumber: str(),
   caseType: str(),
   office: z.union([z.string(), z.undefined()]).transform((v) => v ?? 'DTLA'),
   signed: z.union([z.string(), z.undefined()]).transform((v) => v ?? 'Pending'),
@@ -53,6 +54,7 @@ export const uberRequestSchema = z.object({
 
 export const detailedNarrativeSchema = z.object({
   who: str(),
+  phoneNumber: str(),
   what: str(),
   when: str(),
   where: str(),

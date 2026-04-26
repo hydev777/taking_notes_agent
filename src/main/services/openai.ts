@@ -70,7 +70,7 @@ Rules:
 - Use "detailedNarrative" when the situation is complex and does not fit the other three; fill who/what/when/where/why/how/consequences/nextSteps/additionalNotes from the transcript only.
 
 Field keys for generalNewClients (all strings, empty if unknown):
-name, caseType, office (default "DTLA"), signed (default "Pending"), city, date, email, comments, howDidYouHearAboutUs, scheduleCallBack, agent
+name, phoneNumber, caseType, office (default "DTLA"), signed (default "Pending"), city, date, email, comments, howDidYouHearAboutUs, scheduleCallBack, agent
 
 lemonLaw:
 name, caseType (default "Lemon Law"), office ("DTLA"), phoneNumber, city, date, email, carYearMakeModel, yearOfPurchase, whereBoughtLeasedOrPurchased, newOrUsed, mileageThenOrNow, commentsOrIssues, repairShopVisitsCount, warrantyEnd, howDidYouHearAboutUs, scheduleCallBack, agent
@@ -79,7 +79,7 @@ uberRequest:
 client, phoneNumber, time, pickUp, dropOff, comments, agent
 
 detailedNarrative:
-who, what, when, where, why, how, consequences, nextSteps, additionalNotes
+who, phoneNumber, what, when, where, why, how, consequences, nextSteps, additionalNotes
 
 Never invent facts not supported by the transcript. Use empty string when unknown.
 The profile agent name will be provided separately; put it in the "agent" field when applicable.`
