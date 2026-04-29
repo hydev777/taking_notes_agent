@@ -1,6 +1,8 @@
 import type { TemplateId } from './templateId'
 import type { TemplatePayload } from './zodTemplates'
 
+export type SessionProcessingStatus = 'pending' | 'processing' | 'completed' | 'failed'
+
 export type SessionListItem = {
   id: string
   endedAt: string
@@ -9,6 +11,9 @@ export type SessionListItem = {
   templateId: TemplateId
   preview: string
   audioPath: string
+  processingStatus: SessionProcessingStatus
+  processingError: string | null
+  lastProcessedAt: string | null
 }
 
 export type SessionRecord = {
@@ -22,6 +27,10 @@ export type SessionRecord = {
   templateJson: string
   emailSentAt: string | null
   preview: string
+  processingStatus: SessionProcessingStatus
+  processingError: string | null
+  lastProcessedAt: string | null
+  validationWarnings: string[]
 }
 
 export type ProcessCallResult = {
@@ -79,6 +88,7 @@ export type IpcApi = {
     sourcePath: string
     profileName: string
   }) => Promise<ProcessCallResult>
+  retrySessionProcessing: (sessionId: string) => Promise<ProcessCallResult>
   previewEmail: (sessionId: string) => Promise<EmailPreview | { error: string }>
   sendEmail: (sessionId: string) => Promise<SendEmailResult>
   getSessionAudioBytes: (sessionId: string) => Promise<{ mime: string; data: ArrayBuffer } | null>

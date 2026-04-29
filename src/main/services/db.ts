@@ -3,17 +3,45 @@ import { app } from 'electron'
 import { getDbPath } from './paths'
 import type { TemplateId } from '../../shared/templateId'
 
+export type SessionProcessingStatus = 'pending' | 'processing' | 'completed' | 'failed'
+
 let db: Database.Database | null = null
 const stmtCache: Partial<{
   getProfileName: Database.Statement
   setProfileName: Database.Statement
-  insertSession: Database.Statement
+  upsertSessionBase: Database.Statement
+  updateSessionProcessedData: Database.Statement
+  updateSessionProcessingState: Database.Statement
   updateSessionTemplate: Database.Statement
   deleteSession: Database.Statement
   listSessionRowsLight: Database.Statement
   getSessionRow: Database.Statement
   markEmailSent: Database.Statement
 }> = {}
+
+function ensureSessionsColumns(database: Database.Database): void {
+  const columns = database
+    .prepare("SELECT name FROM pragma_table_info('sessions')")
+    .all() as Array<{ name: string }>
+  const names = new Set(columns.map((row) => row.name))
+  if (!names.has('processing_status')) {
+    database.exec(
+      "ALTER TABLE sessions ADD COLUMN processing_status TEXT NOT NULL DEFAULT 'completed'"
+    )
+  }
+  if (!names.has('processing_error')) {
+    database.exec('ALTER TABLE sessions ADD COLUMN processing_error TEXT')
+  }
+  if (!names.has('last_processed_at')) {
+    database.exec('ALTER TABLE sessions ADD COLUMN last_processed_at TEXT')
+  }
+  if (!names.has('validation_warnings_json')) {
+    database.exec("ALTER TABLE sessions ADD COLUMN validation_warnings_json TEXT NOT NULL DEFAULT '[]'")
+  }
+  database.exec(
+    "UPDATE sessions SET processing_status = 'completed' WHERE processing_status IS NULL OR trim(processing_status) = ''"
+  )
+}
 
 export function getDb(): Database.Database {
   if (db) {
@@ -36,9 +64,14 @@ export function getDb(): Database.Database {
       transcript TEXT NOT NULL,
       template_id TEXT NOT NULL,
       template_json TEXT NOT NULL,
-      email_sent_at TEXT
+      email_sent_at TEXT,
+      processing_status TEXT NOT NULL DEFAULT 'completed',
+      processing_error TEXT,
+      last_processed_at TEXT,
+      validation_warnings_json TEXT NOT NULL DEFAULT '[]'
     );
   `)
+  ensureSessionsColumns(db)
   return db
 }
 
@@ -80,6 +113,10 @@ export type DbSessionRow = {
   template_id: string
   template_json: string
   email_sent_at: string | null
+  processing_status: SessionProcessingStatus
+  processing_error: string | null
+  last_processed_at: string | null
+  validation_warnings_json: string
 }
 
 export type DbSessionListRowLight = {
@@ -91,23 +128,42 @@ export type DbSessionListRowLight = {
   template_json: string
   transcript: string
   preview: string
+  processing_status: SessionProcessingStatus
+  processing_error: string | null
+  last_processed_at: string | null
+  validation_warnings_json: string
 }
 
-export function insertSession(row: {
+export function upsertSessionBase(row: {
   id: string
   endedAt: string
   profileName: string
   audioPath: string
   audioMime: string | null
   transcript: string
-  templateId: TemplateId
-  templateJson: string
+  templateId?: TemplateId
+  templateJson?: string
+  processingStatus: SessionProcessingStatus
+  processingError?: string | null
+  validationWarningsJson?: string
+  lastProcessedAt?: string | null
 }): void {
   const stmt =
-    stmtCache.insertSession ??
-    (stmtCache.insertSession = getDb().prepare(
-      `INSERT INTO sessions (id, ended_at, profile_name, audio_path, audio_mime, transcript, template_id, template_json, email_sent_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)`
+    stmtCache.upsertSessionBase ??
+    (stmtCache.upsertSessionBase = getDb().prepare(
+      `INSERT INTO sessions (
+         id, ended_at, profile_name, audio_path, audio_mime, transcript, template_id, template_json, email_sent_at,
+         processing_status, processing_error, last_processed_at, validation_warnings_json
+       )
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET
+         ended_at = excluded.ended_at,
+         profile_name = excluded.profile_name,
+         audio_path = excluded.audio_path,
+         audio_mime = excluded.audio_mime,
+         processing_status = excluded.processing_status,
+         processing_error = excluded.processing_error,
+         last_processed_at = excluded.last_processed_at`
     ))
   stmt.run(
     row.id,
@@ -116,8 +172,63 @@ export function insertSession(row: {
     row.audioPath,
     row.audioMime,
     row.transcript,
-    row.templateId,
-    row.templateJson
+    row.templateId ?? 'generalNewClients',
+    row.templateJson ?? '{}',
+    row.processingStatus,
+    row.processingError ?? null,
+    row.lastProcessedAt ?? null,
+    row.validationWarningsJson ?? '[]'
+  )
+}
+
+export function updateSessionProcessedData(input: {
+  id: string
+  transcript: string
+  templateId: TemplateId
+  templateJson: string
+  validationWarningsJson: string
+  processingStatus: SessionProcessingStatus
+  processingError?: string | null
+  lastProcessedAt: string
+}): void {
+  const stmt =
+    stmtCache.updateSessionProcessedData ??
+    (stmtCache.updateSessionProcessedData = getDb().prepare(
+      `UPDATE sessions
+       SET transcript = ?, template_id = ?, template_json = ?, validation_warnings_json = ?,
+           processing_status = ?, processing_error = ?, last_processed_at = ?
+       WHERE id = ?`
+    ))
+  stmt.run(
+    input.transcript,
+    input.templateId,
+    input.templateJson,
+    input.validationWarningsJson,
+    input.processingStatus,
+    input.processingError ?? null,
+    input.lastProcessedAt,
+    input.id
+  )
+}
+
+export function updateSessionProcessingState(input: {
+  id: string
+  processingStatus: SessionProcessingStatus
+  processingError?: string | null
+  lastProcessedAt?: string | null
+}): void {
+  const stmt =
+    stmtCache.updateSessionProcessingState ??
+    (stmtCache.updateSessionProcessingState = getDb().prepare(
+      `UPDATE sessions
+       SET processing_status = ?, processing_error = ?, last_processed_at = COALESCE(?, last_processed_at)
+       WHERE id = ?`
+    ))
+  stmt.run(
+    input.processingStatus,
+    input.processingError ?? null,
+    input.lastProcessedAt ?? null,
+    input.id
   )
 }
 
@@ -152,6 +263,10 @@ export function listSessionRowsLight(): DbSessionListRowLight[] {
         audio_path,
         template_id,
         template_json,
+        processing_status,
+        processing_error,
+        last_processed_at,
+        validation_warnings_json,
         transcript,
         CASE
           WHEN length(trim(replace(replace(replace(transcript, char(10), ' '), char(13), ' '), char(9), ' '))) <= 100
@@ -168,7 +283,7 @@ export function getSessionRow(id: string): DbSessionRow | undefined {
   const stmt =
     stmtCache.getSessionRow ??
     (stmtCache.getSessionRow = getDb().prepare(
-      'SELECT id, ended_at, profile_name, audio_path, audio_mime, transcript, template_id, template_json, email_sent_at FROM sessions WHERE id = ?'
+      'SELECT id, ended_at, profile_name, audio_path, audio_mime, transcript, template_id, template_json, email_sent_at, processing_status, processing_error, last_processed_at, validation_warnings_json FROM sessions WHERE id = ?'
     ))
   return stmt.get(id) as DbSessionRow | undefined
 }

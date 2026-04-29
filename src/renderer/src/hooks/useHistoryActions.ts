@@ -32,7 +32,7 @@ function toSessionLoaded(r: SessionRecord): SessionLoadedPayload {
     transcript: r.transcript,
     templateId: r.templateId,
     templateData: normalized,
-    warnings: []
+    warnings: r.validationWarnings
   }
 }
 
@@ -40,6 +40,7 @@ export function useHistoryActions(params: Params): {
   loadHistory: () => Promise<void>
   openSession: (id: string) => Promise<void>
   deleteSession: (id: string) => Promise<void>
+  retryProcessing: (id: string) => Promise<void>
 } {
   const loadHistory = useCallback(async () => {
     params.onError(null)
@@ -96,5 +97,28 @@ export function useHistoryActions(params: Params): {
     [params]
   )
 
-  return { loadHistory, openSession, deleteSession }
+  const retryProcessing = useCallback(
+    async (id: string) => {
+      params.onError(null)
+      params.onBusyMessage('Running AI transcription and template fill…')
+      try {
+        await window.api.retrySessionProcessing(id)
+        const rows = await window.api.listSessions()
+        params.setHistory(rows)
+        if (params.currentSessionId === id) {
+          const row = await window.api.getSession(id)
+          if (row) {
+            params.setSessionLoaded(toSessionLoaded(row))
+          }
+        }
+      } catch (e) {
+        params.onError(e instanceof Error ? e.message : String(e))
+      } finally {
+        params.onBusyMessage(null)
+      }
+    },
+    [params]
+  )
+
+  return { loadHistory, openSession, deleteSession, retryProcessing }
 }

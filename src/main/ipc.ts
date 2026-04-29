@@ -13,11 +13,13 @@ import {
   deleteSession,
   getProfileName,
   getSessionRow,
-  insertSession,
   listSessionRowsLight,
   markEmailSent,
   setProfileName,
+  updateSessionProcessedData,
+  updateSessionProcessingState,
   updateSessionTemplate,
+  upsertSessionBase,
   type DbSessionListRowLight,
   type DbSessionRow
 } from './services/db'
@@ -35,6 +37,7 @@ import { registerDisplayMediaSupport } from './services/displayMedia'
 const SAFE_SESSION_ID_RE = /^[A-Za-z0-9_-]{1,80}$/
 const ALLOWED_IMPORT_EXTS = new Set(['.webm', '.wav', '.mp3', '.mpeg', '.m4a', '.ogg'])
 const pendingImportBySession = new Map<string, string>()
+const AUTO_PROCESS_MAX_ATTEMPTS = 3
 
 function requireApiKey(): string {
   const key = process.env.OPENAI_API_KEY
@@ -178,24 +181,27 @@ function dedupeTranscriptRepeats(transcript: string): string {
   return deduped.join(' ').trim()
 }
 
-async function persistProcessedSession(input: {
-  sessionId: string
-  profileName: string
-  audioPath: string
-  audioMime: string | null
-  transcript: string
-  payload: TemplatePayload
-}): Promise<void> {
-  insertSession({
-    id: input.sessionId,
-    endedAt: new Date().toISOString(),
-    profileName: input.profileName,
-    audioPath: input.audioPath,
-    audioMime: input.audioMime,
-    transcript: input.transcript,
-    templateId: input.payload.templateId,
-    templateJson: JSON.stringify(input.payload.data)
-  })
+function parseWarningsJson(raw: string): string[] {
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    return Array.isArray(parsed) ? parsed.map((item) => String(item)) : []
+  } catch {
+    return []
+  }
+}
+
+function normalizeProcessingError(error: unknown): string {
+  const raw = error instanceof Error ? error.message : String(error)
+  const lower = raw.toLowerCase()
+  const category =
+    lower.includes('timeout') || lower.includes('connect') || lower.includes('socket')
+      ? 'network'
+      : lower.includes('openai') || lower.includes('transcription failed') || lower.includes('llm')
+        ? 'api'
+        : lower.includes('validation') || lower.includes('json')
+          ? 'validation'
+          : 'unknown'
+  return `${category}: ${raw}`
 }
 
 async function runPipelineOnDiskFile(input: {
@@ -205,7 +211,7 @@ async function runPipelineOnDiskFile(input: {
   filenameForApi: string
   mimeForApi: string
   profileName: string
-}): Promise<ProcessCallResult> {
+}): Promise<{ transcript: string; payload: TemplatePayload; validationWarnings: string[] }> {
   const apiKey = requireApiKey()
   const rawTranscript = await transcribeAudioFile({
     filePath: input.audioPath,
@@ -244,15 +250,58 @@ async function runPipelineOnDiskFile(input: {
     caseType: payload.templateId === 'generalNewClients' ? payload.data.caseType : '',
     comments: payload.templateId === 'generalNewClients' ? payload.data.comments : ''
   })
-  await persistProcessedSession({
-    sessionId: input.sessionId,
-    profileName: input.profileName,
-    audioPath: input.audioPath,
-    audioMime: input.audioMime,
-    transcript,
-    payload
+  return { transcript, payload, validationWarnings }
+}
+
+async function processSessionOnDiskFile(input: {
+  sessionId: string
+  audioPath: string
+  audioMime: string | null
+  filenameForApi: string
+  mimeForApi: string
+  profileName: string
+  attempts?: number
+}): Promise<ProcessCallResult> {
+  const attempts = Math.max(1, input.attempts ?? AUTO_PROCESS_MAX_ATTEMPTS)
+  let lastError: unknown = null
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      const result = await runPipelineOnDiskFile({
+        sessionId: input.sessionId,
+        audioPath: input.audioPath,
+        audioMime: input.audioMime,
+        filenameForApi: input.filenameForApi,
+        mimeForApi: input.mimeForApi,
+        profileName: input.profileName
+      })
+      const finishedAt = new Date().toISOString()
+      updateSessionProcessedData({
+        id: input.sessionId,
+        transcript: result.transcript,
+        templateId: result.payload.templateId,
+        templateJson: JSON.stringify(result.payload.data),
+        validationWarningsJson: JSON.stringify(result.validationWarnings),
+        processingStatus: 'completed',
+        processingError: null,
+        lastProcessedAt: finishedAt
+      })
+      return {
+        transcript: result.transcript,
+        templatePayload: result.payload,
+        validationWarnings: result.validationWarnings
+      }
+    } catch (error) {
+      lastError = error
+    }
+  }
+  const normalized = normalizeProcessingError(lastError)
+  updateSessionProcessingState({
+    id: input.sessionId,
+    processingStatus: 'failed',
+    processingError: normalized,
+    lastProcessedAt: new Date().toISOString()
   })
-  return { transcript, templatePayload: payload, validationWarnings }
+  throw new Error(normalized)
 }
 
 function rowToListItem(row: DbSessionListRowLight): SessionListItem {
@@ -280,7 +329,10 @@ function rowToListItem(row: DbSessionListRowLight): SessionListItem {
     clientName,
     templateId,
     preview: row.preview,
-    audioPath: row.audio_path
+    audioPath: row.audio_path,
+    processingStatus: row.processing_status,
+    processingError: row.processing_error,
+    lastProcessedAt: row.last_processed_at
   }
 }
 
@@ -296,6 +348,10 @@ function rowToRecord(row: DbSessionRow): SessionRecord {
     templateId,
     templateJson: row.template_json,
     emailSentAt: row.email_sent_at,
+    processingStatus: row.processing_status,
+    processingError: row.processing_error,
+    lastProcessedAt: row.last_processed_at,
+    validationWarnings: parseWarningsJson(row.validation_warnings_json),
     preview:
       row.transcript.replace(/\s+/g, ' ').trim().length <= 100
         ? row.transcript.replace(/\s+/g, ' ').trim()
@@ -413,7 +469,18 @@ export function registerIpcHandlers(): void {
       const ext = input.mimeType.includes('webm') ? '.webm' : '.bin'
       const audioPath = resolveAudioPathInSessionsDir(dir, sessionId, ext)
       await writeFile(audioPath, Buffer.from(input.audio))
-      return runPipelineOnDiskFile({
+      upsertSessionBase({
+        id: sessionId,
+        endedAt: new Date().toISOString(),
+        profileName: input.profileName,
+        audioPath,
+        audioMime: input.mimeType,
+        transcript: '',
+        processingStatus: 'processing',
+        processingError: null,
+        validationWarningsJson: '[]'
+      })
+      return processSessionOnDiskFile({
         sessionId,
         audioPath,
         audioMime: input.mimeType,
@@ -469,7 +536,18 @@ export function registerIpcHandlers(): void {
               : lower === '.ogg'
                 ? 'audio/ogg'
                 : 'audio/webm'
-      return runPipelineOnDiskFile({
+      upsertSessionBase({
+        id: sessionId,
+        endedAt: new Date().toISOString(),
+        profileName: input.profileName,
+        audioPath,
+        audioMime: mime,
+        transcript: '',
+        processingStatus: 'processing',
+        processingError: null,
+        validationWarningsJson: '[]'
+      })
+      return processSessionOnDiskFile({
         sessionId,
         audioPath,
         audioMime: mime,
@@ -479,6 +557,32 @@ export function registerIpcHandlers(): void {
       })
     }
   )
+
+  ipcMain.handle('tna:retry-session-processing', async (_e, sessionIdRaw: string) => {
+    const sessionId = assertSafeSessionId(sessionIdRaw)
+    const row = getSessionRow(sessionId)
+    if (!row) {
+      throw new Error('Session not found')
+    }
+    if (row.processing_status === 'processing') {
+      throw new Error('This session is already processing')
+    }
+    updateSessionProcessingState({
+      id: sessionId,
+      processingStatus: 'processing',
+      processingError: null
+    })
+    const extension = extname(row.audio_path).toLowerCase() || '.webm'
+    const mimeForApi = row.audio_mime ?? 'audio/webm'
+    return processSessionOnDiskFile({
+      sessionId,
+      audioPath: row.audio_path,
+      audioMime: row.audio_mime,
+      filenameForApi: `retry${extension}`,
+      mimeForApi,
+      profileName: row.profile_name
+    })
+  })
 
   ipcMain.handle('tna:preview-email', async (_e, sessionId: string) => {
     const row = getSessionRow(sessionId)

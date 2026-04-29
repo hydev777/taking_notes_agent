@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
-import type { SessionListItem } from '@shared/ipc'
+import type { SessionListItem, SessionProcessingStatus } from '@shared/ipc'
 import { TEMPLATE_LABELS } from '@shared/templateId'
 import type { TemplateId } from '@shared/templateId'
 import { AudioPlayer } from './AudioPlayer'
@@ -98,6 +98,19 @@ function buildFullParagraph(templateId: TemplateId, templateData: Record<string,
   ].join('\n')
 }
 
+function statusLabel(status: SessionProcessingStatus): string {
+  if (status === 'failed') {
+    return 'Failed'
+  }
+  if (status === 'processing') {
+    return 'Processing'
+  }
+  if (status === 'pending') {
+    return 'Pending'
+  }
+  return 'Completed'
+}
+
 export function HistoryView(props: Props): ReactElement {
   const [history, setHistory] = useState<SessionListItem[]>([])
   const [busy, setBusy] = useState<string | null>(null)
@@ -117,7 +130,7 @@ export function HistoryView(props: Props): ReactElement {
     [templateId, templateData]
   )
 
-  const { loadHistory, openSession, deleteSession } = useHistoryActions({
+  const { loadHistory, openSession, deleteSession, retryProcessing } = useHistoryActions({
     onError: setError,
     onBusyMessage: setBusy,
     setHistory,
@@ -204,12 +217,25 @@ export function HistoryView(props: Props): ReactElement {
                   <div className="session-row-title">
                     <strong>{s.clientName}</strong> · {formatHistoryDate(s.endedAt)}
                   </div>
+                  <div className="session-row-sub">
+                    <span className={`status-pill session-${s.processingStatus}`}>
+                      {statusLabel(s.processingStatus)}
+                    </span>
+                    {s.processingError ? ` · ${s.processingError}` : ''}
+                  </div>
                   <div className="session-row-sub">{TEMPLATE_LABELS[s.templateId]}</div>
                   <div className="session-row-sub">{s.preview}</div>
                 </div>
                 <div className="row">
                   <button type="button" onClick={() => void openSession(s.id)}>
                     Open
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!!busy || s.processingStatus === 'processing' || s.processingStatus === 'completed'}
+                    onClick={() => void retryProcessing(s.id)}
+                  >
+                    Transcribir llamada y llenar template
                   </button>
                   <button type="button" className="danger" onClick={() => void deleteSession(s.id)}>
                     Delete
@@ -241,8 +267,15 @@ export function HistoryView(props: Props): ReactElement {
               <p className="muted">
                 AI assistant transcript draft. Review the dialogue and adjust template fields as needed.
               </p>
+              {history.find((item) => item.id === sessionId)?.processingError ? (
+                <p className="warnings">
+                  Last processing error: {history.find((item) => item.id === sessionId)?.processingError}
+                </p>
+              ) : null}
               <div className="transcript-readonly" aria-readonly="true">
-                {transcript}
+                {transcript.trim()
+                  ? transcript
+                  : 'Transcript is not available yet. If automatic processing failed, click "Transcribir llamada y llenar template".'}
               </div>
             </div>
 
@@ -267,7 +300,14 @@ export function HistoryView(props: Props): ReactElement {
                 </button>
               </div>
               {templatePanelMode === 'fields' ? (
-                <TemplateEditor templateId={templateId} data={templateData} onChange={setTemplateData} />
+                <>
+                  {!transcript.trim() ? (
+                    <p className="muted">
+                      Template autofill has not completed yet. Run "Transcribir llamada y llenar template" to generate fields automatically.
+                    </p>
+                  ) : null}
+                  <TemplateEditor templateId={templateId} data={templateData} onChange={setTemplateData} />
+                </>
               ) : (
                 <div className="template-paragraph-wrap stack">
                   <textarea
@@ -277,6 +317,17 @@ export function HistoryView(props: Props): ReactElement {
                     aria-label="Template as one paragraph"
                   />
                   <div className="row">
+                    <button
+                      type="button"
+                      disabled={
+                        !!busy ||
+                        history.find((item) => item.id === sessionId)?.processingStatus === 'processing' ||
+                        history.find((item) => item.id === sessionId)?.processingStatus === 'completed'
+                      }
+                      onClick={() => void retryProcessing(sessionId)}
+                    >
+                      Transcribir llamada y llenar template
+                    </button>
                     <button
                       type="button"
                       disabled={!!busy}

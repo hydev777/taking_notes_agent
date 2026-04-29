@@ -469,6 +469,26 @@ main {
   background: #fee2e2;
 }
 
+.status-pill.session-completed {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.status-pill.session-processing {
+  color: #1d4ed8;
+  background: #dbeafe;
+}
+
+.status-pill.session-failed {
+  color: #991b1b;
+  background: #fee2e2;
+}
+
+.status-pill.session-pending {
+  color: #92400e;
+  background: #fef3c7;
+}
+
 .profile-card {
   max-width: 620px;
 }

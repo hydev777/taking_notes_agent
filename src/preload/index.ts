@@ -14,6 +14,8 @@ const api: IpcApi = {
   processCallAudio: (input) => ipcRenderer.invoke('tna:process-call-audio', input),
   importAudioFile: () => ipcRenderer.invoke('tna:import-audio-file'),
   processImportedFile: (input) => ipcRenderer.invoke('tna:process-imported-file', input),
+  retrySessionProcessing: (sessionId: string) =>
+    ipcRenderer.invoke('tna:retry-session-processing', sessionId),
   previewEmail: (sessionId: string) => ipcRenderer.invoke('tna:preview-email', sessionId),
   sendEmail: (sessionId: string) => ipcRenderer.invoke('tna:send-email', sessionId),
   getSessionAudioBytes: (sessionId: string) =>
