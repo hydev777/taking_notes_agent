@@ -119,6 +119,65 @@ function appendGeneratedComments(existing: string, generated: string, categoryLa
   return `${base}\n\n---\n${title}\n${next}`
 }
 
+function tokenizeForSimilarity(input: string): string[] {
+  return input
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter((token) => token.length > 0)
+}
+
+function diceSimilarity(a: string, b: string): number {
+  const aTokens = tokenizeForSimilarity(a)
+  const bTokens = tokenizeForSimilarity(b)
+  if (aTokens.length === 0 || bTokens.length === 0) {
+    return 0
+  }
+  const bBag = new Map<string, number>()
+  for (const token of bTokens) {
+    bBag.set(token, (bBag.get(token) ?? 0) + 1)
+  }
+  let overlap = 0
+  for (const token of aTokens) {
+    const count = bBag.get(token) ?? 0
+    if (count > 0) {
+      overlap += 1
+      bBag.set(token, count - 1)
+    }
+  }
+  return (2 * overlap) / (aTokens.length + bTokens.length)
+}
+
+function dedupeTranscriptRepeats(transcript: string): string {
+  const compact = transcript.replace(/\s+/g, ' ').trim()
+  if (!compact) {
+    return compact
+  }
+  const parts = compact
+    .split(/(?<=[.!?])\s+|\n+/)
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0)
+  if (parts.length < 2) {
+    return compact
+  }
+  const deduped: string[] = []
+  for (const current of parts) {
+    const previous = deduped[deduped.length - 1]
+    if (!previous) {
+      deduped.push(current)
+      continue
+    }
+    const minLength = Math.min(previous.length, current.length)
+    const similar = diceSimilarity(previous, current) >= 0.92
+    const longEnough = minLength >= 35
+    if (similar && longEnough) {
+      continue
+    }
+    deduped.push(current)
+  }
+  return deduped.join(' ').trim()
+}
+
 async function persistProcessedSession(input: {
   sessionId: string
   profileName: string
@@ -148,12 +207,13 @@ async function runPipelineOnDiskFile(input: {
   profileName: string
 }): Promise<ProcessCallResult> {
   const apiKey = requireApiKey()
-  const transcript = await transcribeAudioFile({
+  const rawTranscript = await transcribeAudioFile({
     filePath: input.audioPath,
     apiKey,
     filename: input.filenameForApi,
     mimeType: input.mimeForApi
   })
+  const transcript = dedupeTranscriptRepeats(rawTranscript)
   let payload = await structureTemplateFromTranscript({
     transcript,
     agentName: input.profileName,

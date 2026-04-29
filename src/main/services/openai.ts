@@ -6,6 +6,7 @@ const TRANSCRIBE_URL = 'https://api.openai.com/v1/audio/transcriptions'
 const CHAT_URL = 'https://api.openai.com/v1/chat/completions'
 const TRANSCRIBE_TIMEOUT_MS = 90_000
 const CHAT_TIMEOUT_MS = 45_000
+const TRANSCRIBE_MAX_ATTEMPTS = 3
 
 /** Budget chat model for plain-text template paragraph only (not JSON extraction). Override via OPENAI_TEMPLATE_PARAGRAPH_MODEL. */
 const DEFAULT_TEMPLATE_PARAGRAPH_MODEL = 'gpt-3.5-turbo'
@@ -55,6 +56,26 @@ async function fetchWithTimeout(
   }
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function isRetryableFetchError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false
+  }
+  const cause = (error as { cause?: unknown }).cause
+  const causeCode =
+    typeof cause === 'object' && cause != null && 'code' in cause
+      ? String((cause as { code?: unknown }).code ?? '')
+      : ''
+  return (
+    causeCode === 'UND_ERR_CONNECT_TIMEOUT' ||
+    causeCode === 'UND_ERR_HEADERS_TIMEOUT' ||
+    causeCode === 'UND_ERR_SOCKET'
+  )
+}
+
 const SYSTEM_PROMPT = `You are an intake note assistant for a US law firm answering service (DTLA-style).
 You receive an English call transcript. Output ONLY valid JSON (no markdown) matching this shape:
 {
@@ -92,22 +113,40 @@ export async function transcribeAudioFile(params: {
   mimeType: string
 }): Promise<string> {
   const buffer = await readFile(params.filePath)
-  const body = new FormData()
-  body.append('file', new Blob([buffer], { type: params.mimeType }), params.filename)
-  body.append('model', 'whisper-1')
-
-  const res = await fetchWithTimeout(
-    TRANSCRIBE_URL,
-    {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${params.apiKey}`
-    },
-    body
-    },
-    TRANSCRIBE_TIMEOUT_MS,
-    'Transcription request'
-  )
+  let res: Response | null = null
+  let lastError: unknown = null
+  for (let attempt = 1; attempt <= TRANSCRIBE_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      const body = new FormData()
+      body.append('file', new Blob([buffer], { type: params.mimeType }), params.filename)
+      body.append('model', 'whisper-1')
+      res = await fetchWithTimeout(
+        TRANSCRIBE_URL,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${params.apiKey}`
+          },
+          body
+        },
+        TRANSCRIBE_TIMEOUT_MS,
+        'Transcription request'
+      )
+      break
+    } catch (error) {
+      lastError = error
+      const retryable = isRetryableFetchError(error)
+      if (!retryable || attempt === TRANSCRIBE_MAX_ATTEMPTS) {
+        throw error
+      }
+      await sleep(attempt * 700)
+    }
+  }
+  if (!res) {
+    throw new Error(
+      `Transcription failed after ${TRANSCRIBE_MAX_ATTEMPTS} attempts: ${String(lastError)}`
+    )
+  }
 
   if (!res.ok) {
     const errText = await res.text()

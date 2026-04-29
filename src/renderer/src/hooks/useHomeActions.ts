@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import type { useRecorder } from './useRecorder'
+import type { CaptureAudioSource, useRecorder } from './useRecorder'
 
 type RecorderApi = ReturnType<typeof useRecorder>
 
@@ -12,13 +12,13 @@ type Params = {
 }
 
 export function useHomeActions(params: Params): {
-  startRecording: () => Promise<void>
+  startRecording: (source: CaptureAudioSource) => Promise<void>
   stopRecording: () => Promise<void>
   stopWithoutProcessing: () => void
 } {
   const sleep = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms))
 
-  const startRecording = useCallback(async () => {
+  const startRecording = useCallback(async (source: CaptureAudioSource) => {
     params.onError(null)
     params.onBusyMessage('AI assistant is checking profile and preparing capture...')
     try {
@@ -28,7 +28,7 @@ export function useHomeActions(params: Params): {
         return
       }
       const id = crypto.randomUUID()
-      await params.recorder.start(id)
+      await params.recorder.start(id, source)
     } catch (e) {
       params.onError(e instanceof Error ? e.message : String(e))
     } finally {

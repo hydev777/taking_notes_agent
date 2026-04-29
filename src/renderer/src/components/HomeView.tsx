@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type MouseEvent, type ReactElement } from 'react'
 import type { DisplayMediaSourceOption } from '@shared/ipc'
 import { useHomeActions } from '../hooks/useHomeActions'
-import { useRecorder } from '../hooks/useRecorder'
+import { type CaptureAudioSource, useRecorder } from '../hooks/useRecorder'
 
 type Props = {
   onRequireProfile: () => void
@@ -14,6 +14,9 @@ export function HomeView(props: Props): ReactElement {
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [displayPickerSources, setDisplayPickerSources] = useState<DisplayMediaSourceOption[] | null>(null)
+  const [captureSource, setCaptureSource] = useState<CaptureAudioSource>(() =>
+    /Windows/i.test(navigator.userAgent) ? 'systemOnly' : 'micOnly'
+  )
 
   const { startRecording, stopRecording, stopWithoutProcessing } = useHomeActions({
     recorder,
@@ -76,16 +79,43 @@ export function HomeView(props: Props): ReactElement {
     <div className="stack">
       <div className="panel stack">
         <div className="panel-header">
-          <h2>AI Call Assistant (CTM tab + mic)</h2>
+          <h2>AI Call Assistant (configurable audio source)</h2>
           {recorder.state.status === 'recording' ? (
             <span className="status-pill recording">Recording live</span>
           ) : null}
         </div>
         <p className="muted">
           Your AI collaborator captures the call, transcribes the conversation, fills structured
-          fields, and prepares the session for review. Choose the call source when prompted. On
-          Windows, system audio loopback is mixed with your mic.
+          fields, and prepares the session for review. Default source prioritizes system audio to
+          reduce repeated transcript loops.
         </p>
+        <div className="capture-mode-grid">
+          <div>
+            <label htmlFor="capture-source">Audio source</label>
+            <select
+              id="capture-source"
+              value={captureSource}
+              disabled={recorder.state.status === 'recording' || !!busy}
+              onChange={(e) => setCaptureSource(e.target.value as CaptureAudioSource)}
+            >
+              <option value="systemOnly">System only (recommended default)</option>
+              <option value="systemAndMic">System + microphone</option>
+              <option value="micOnly">Microphone only</option>
+            </select>
+          </div>
+          <p className="muted">
+            {captureSource === 'systemOnly'
+              ? 'Captures call audio directly from system/tab when available. Best to avoid duplicated phrases.'
+              : captureSource === 'systemAndMic'
+                ? 'Includes your voice plus call audio. Use a headset to prevent speaker bleed and repeated transcript segments.'
+                : 'Records only microphone input. Use this fallback if system loopback is unavailable.'}
+          </p>
+        </div>
+        {captureSource === 'systemAndMic' ? (
+          <p className="warnings">
+            Headset recommended: using speakers with System + microphone can duplicate call audio and cause repeated phrases.
+          </p>
+        ) : null}
         <div className="assistant-console">
           <p className="assistant-title">AI Processing Console</p>
           <ol className="assistant-timeline">
@@ -120,7 +150,7 @@ export function HomeView(props: Props): ReactElement {
             type="button"
             className="primary"
             disabled={recorder.state.status === 'recording' || !!busy}
-            onClick={() => void startRecording()}
+            onClick={() => void startRecording(captureSource)}
           >
             Start recording
           </button>

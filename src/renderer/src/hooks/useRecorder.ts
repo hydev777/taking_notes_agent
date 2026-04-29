@@ -1,5 +1,7 @@
 import { useCallback, useRef, useState } from 'react'
 
+export type CaptureAudioSource = 'systemOnly' | 'systemAndMic' | 'micOnly'
+
 export type RecorderState =
   | { status: 'idle' }
   | { status: 'recording'; captureNote: string | null }
@@ -28,7 +30,7 @@ export function useRecorder() {
     ctxRef.current = null
   }, [])
 
-  const start = useCallback(async (sessionId: string) => {
+  const start = useCallback(async (sessionId: string, source: CaptureAudioSource) => {
     if (state.status === 'recording') {
       return
     }
@@ -36,33 +38,61 @@ export function useRecorder() {
     chunksRef.current = []
     let display: MediaStream | null = null
     try {
-      display = await navigator.mediaDevices.getDisplayMedia({
-        video: true,
-        audio: true
-      })
-      displayStreamRef.current = display
-      const mic = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
-      micStreamRef.current = mic
+      const wantsSystem = source === 'systemOnly' || source === 'systemAndMic'
+      const wantsMic = source === 'micOnly' || source === 'systemAndMic'
+
+      if (wantsSystem) {
+        display = await navigator.mediaDevices.getDisplayMedia({
+          video: true,
+          audio: true
+        })
+        displayStreamRef.current = display
+      } else {
+        displayStreamRef.current = null
+      }
+
+      if (wantsMic) {
+        const mic = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+            channelCount: 1
+          },
+          video: false
+        })
+        micStreamRef.current = mic
+      } else {
+        micStreamRef.current = null
+      }
 
       const ctx = new AudioContext()
       ctxRef.current = ctx
       const dest = ctx.createMediaStreamDestination()
 
-      const displayAudioTracks = display.getAudioTracks()
+      const displayAudioTracks = display?.getAudioTracks() ?? []
+      const hasSystemAudio = displayAudioTracks.length > 0
+      const hasMicAudio = (micStreamRef.current?.getAudioTracks().length ?? 0) > 0
       let captureNote: string | null = null
-      if (displayAudioTracks.length === 0) {
+      if (wantsSystem && !hasSystemAudio) {
         captureNote =
-          'This capture has no system/tab audio track (common on macOS without loopback). Recording microphone only — place the call on speaker or use Windows for system loopback + tab mix.'
+          'No system/tab audio track detected. Fallback to microphone-only capture. Use Windows loopback or tab share audio for best call transcription.'
       }
 
-      const micSource = ctx.createMediaStreamSource(mic)
-      if (displayAudioTracks.length > 0) {
+      if (hasSystemAudio) {
         const displaySource = ctx.createMediaStreamSource(new MediaStream(displayAudioTracks))
         displaySource.connect(dest)
       }
-      micSource.connect(dest)
+      if (hasMicAudio && micStreamRef.current) {
+        const micSource = ctx.createMediaStreamSource(micStreamRef.current)
+        micSource.connect(dest)
+      }
 
-      for (const vt of display.getVideoTracks()) {
+      if (!hasSystemAudio && !hasMicAudio) {
+        throw new Error('No audio source available. Enable tab/system audio or microphone.')
+      }
+
+      for (const vt of display?.getVideoTracks() ?? []) {
         vt.stop()
       }
 
