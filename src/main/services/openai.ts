@@ -8,24 +8,45 @@ const TRANSCRIBE_TIMEOUT_MS = 90_000
 const CHAT_TIMEOUT_MS = 45_000
 const TRANSCRIBE_MAX_ATTEMPTS = 3
 
-/** Budget chat model for plain-text template paragraph only (not JSON extraction). Override via OPENAI_TEMPLATE_PARAGRAPH_MODEL. */
-const DEFAULT_TEMPLATE_PARAGRAPH_MODEL = 'gpt-3.5-turbo'
+/** Cheap OpenAI transcription model (~50% of whisper-1 per minute). Override via OPENAI_TRANSCRIBE_MODEL (e.g. "whisper-1" to roll back). */
+const DEFAULT_TRANSCRIBE_MODEL = 'gpt-4o-mini-transcribe'
 
-const TRANSCRIPT_TAIL_CHARS = 12_000
+/** OpenAI chat model used when DEEPSEEK_API_KEY is unset. Override via OPENAI_CHAT_MODEL / OPENAI_TEMPLATE_PARAGRAPH_MODEL. */
+const DEFAULT_OPENAI_CHAT_MODEL = 'gpt-4o-mini'
 
-const TEMPLATE_PARAGRAPH_SYSTEM = `You are an intake note assistant for a US law firm answering service (DTLA-style).
-You receive structured template fields (labels + values) and the call transcript in English.
-Write ONE fluent paragraph in English that summarizes the situation for a colleague: weave the field values together with natural context, using the transcript only to clarify or support what is already in the fields.
-Rules:
-- Output ONLY plain text: a single paragraph. No markdown, no bullet lists, no headings.
-- Do not invent facts that are not supported by the fields or the transcript.
-- If a field is empty, skip it or mention generically only if needed for flow; do not fabricate details.
-- Keep professional tone suitable for case notes.`
+/** DeepSeek defaults; used when DEEPSEEK_API_KEY is set. */
+const DEFAULT_DEEPSEEK_BASE_URL = 'https://api.deepseek.com'
+const DEFAULT_DEEPSEEK_CHAT_MODEL = 'deepseek-v4-flash'
 
-function templateParagraphModel(): string {
-  const m = process.env.OPENAI_TEMPLATE_PARAGRAPH_MODEL?.trim()
-  return m && m.length > 0 ? m : DEFAULT_TEMPLATE_PARAGRAPH_MODEL
+/** Caps to prevent runaway completions. */
+const JSON_EXTRACTION_MAX_TOKENS = 700
+const PARAGRAPH_MAX_TOKENS = 220
+
+/** Tail of the transcript fed to paragraph synthesis. ~1k tokens; structured fields already carry the facts. */
+const TRANSCRIPT_TAIL_CHARS = 4_000
+
+type ChatKind = 'json' | 'paragraph'
+
+type ChatProvider = { url: string; apiKey: string; model: string }
+
+function resolveChatProvider(openaiKey: string, kind: ChatKind): ChatProvider {
+  const dsKey = process.env.DEEPSEEK_API_KEY?.trim()
+  if (dsKey) {
+    const base = process.env.DEEPSEEK_BASE_URL?.trim() || DEFAULT_DEEPSEEK_BASE_URL
+    const model = process.env.DEEPSEEK_CHAT_MODEL?.trim() || DEFAULT_DEEPSEEK_CHAT_MODEL
+    return { url: `${base}/chat/completions`, apiKey: dsKey, model }
+  }
+  const override =
+    kind === 'json'
+      ? process.env.OPENAI_CHAT_MODEL?.trim()
+      : process.env.OPENAI_TEMPLATE_PARAGRAPH_MODEL?.trim()
+  return { url: CHAT_URL, apiKey: openaiKey, model: override || DEFAULT_OPENAI_CHAT_MODEL }
 }
+
+const TEMPLATE_PARAGRAPH_SYSTEM = `Write ONE English paragraph for a US law firm case note (DTLA).
+Input: labeled template fields + call transcript.
+Weave field values into a natural professional summary; use the transcript only to clarify what the fields already say.
+Output ONLY plain text (no markdown, lists, or headings). Skip empty fields. Never invent facts.`
 
 function tailTranscript(transcript: string, maxChars: number): string {
   const t = transcript.trim()
@@ -76,35 +97,27 @@ function isRetryableFetchError(error: unknown): boolean {
   )
 }
 
-const SYSTEM_PROMPT = `You are an intake note assistant for a US law firm answering service (DTLA-style).
-You receive an English call transcript. Output ONLY valid JSON (no markdown) matching this shape:
-{
-  "templateId": one of "generalNewClients" | "lemonLaw" | "uberRequest",
-  "data": { ... }
-}
+const SYSTEM_PROMPT = `Extract intake JSON from a US law firm call transcript (English).
+Output ONLY valid JSON: {"templateId":"generalNewClients"|"lemonLaw"|"uberRequest","data":{...}}.
+No markdown, no prose. Empty string for unknown fields. Never invent facts.
 
-Rules:
-- Pick exactly ONE templateId based on the call.
-- Use "lemonLaw" when the matter is clearly a defective vehicle / lemon law.
-- Use "uberRequest" when the caller is requesting or describing an Uber/trip/ride pickup-dropoff style request.
-- Use "generalNewClients" for typical new client intake that matches general fields.
-- For generalNewClients, use data from transcript to fill caseType and comments.
-- If caseType indicates Wrongful Termination, comments MUST include: company/workplace exact name, reason of termination, salary, and time with company/workplace.
-- If caseType indicates Injury/Accidents/Assault/Slip and fall, comments MUST include: when, where, how, police report YES/NO, and injury details.
-- If caseType indicates Workers' Comp Injury (employee injured in company and seeking compensation), comments MUST include: company/workplace exact name, when, how, and injury details.
-- If caseType does not match those three categories, comments should still provide a rich open summary (what happened, how, why/context, key details).
+Pick ONE templateId:
+- lemonLaw: defective vehicle / lemon law matter.
+- uberRequest: ride/trip pickup-dropoff request.
+- generalNewClients: any other intake.
 
-Field keys for generalNewClients (all strings, empty if unknown):
-name, phoneNumber, caseType, office (default "DTLA"), signed (default "Pending"), city, date, email, comments, howDidYouHearAboutUs, scheduleCallBack, agent
+generalNewClients comments rules (based on caseType):
+- Wrongful Termination: include company/workplace exact name, reason of termination, salary, time with company.
+- Injury/Accident/Assault/Slip-Fall: include when, where, how, police report YES/NO, injury details.
+- Workers' Comp Injury: include company/workplace exact name, when, how, injury details.
+- Other: brief rich summary (what, how, why, key details).
 
-lemonLaw:
-name, caseType (default "Lemon Law"), office ("DTLA"), phoneNumber, city, date, email, carYearMakeModel, yearOfPurchase, whereBoughtLeasedOrPurchased, newOrUsed, mileageThenOrNow, commentsOrIssues, repairShopVisitsCount, warrantyEnd, howDidYouHearAboutUs, scheduleCallBack, agent
+Field keys (all strings):
+generalNewClients: name, phoneNumber, caseType, office (default "DTLA"), signed (default "Pending"), city, date, email, comments, howDidYouHearAboutUs, scheduleCallBack, agent
+lemonLaw: name, caseType (default "Lemon Law"), office (default "DTLA"), phoneNumber, city, date, email, carYearMakeModel, yearOfPurchase, whereBoughtLeasedOrPurchased, newOrUsed, mileageThenOrNow, commentsOrIssues, repairShopVisitsCount, warrantyEnd, howDidYouHearAboutUs, scheduleCallBack, agent
+uberRequest: client, phoneNumber, time, pickUp, dropOff, comments, agent
 
-uberRequest:
-client, phoneNumber, time, pickUp, dropOff, comments, agent
-
-Never invent facts not supported by the transcript. Use empty string when unknown.
-The profile agent name will be provided separately; put it in the "agent" field when applicable.`
+Leave "agent" empty; it is filled in post-processing.`
 
 export async function transcribeAudioFile(params: {
   filePath: string
@@ -119,7 +132,7 @@ export async function transcribeAudioFile(params: {
     try {
       const body = new FormData()
       body.append('file', new Blob([buffer], { type: params.mimeType }), params.filename)
-      body.append('model', 'whisper-1')
+      body.append('model', process.env.OPENAI_TRANSCRIBE_MODEL?.trim() || DEFAULT_TRANSCRIBE_MODEL)
       res = await fetchWithTimeout(
         TRANSCRIBE_URL,
         {
@@ -165,25 +178,29 @@ export async function structureTemplateFromTranscript(params: {
   agentName: string
   apiKey: string
 }): Promise<TemplatePayload> {
-  const user = `Agent name for templates (use in "agent" where applicable): ${params.agentName}\n\nTranscript:\n${params.transcript}`
+  // agentName is intentionally not sent to the LLM: it is filled in post-processing
+  // by applyAgentToPayload (src/main/ipc.ts), so the user message stays minimal.
+  void params.agentName
+  const provider = resolveChatProvider(params.apiKey, 'json')
 
   const res = await fetchWithTimeout(
-    CHAT_URL,
+    provider.url,
     {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${params.apiKey}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      model: 'gpt-4o-mini',
-      temperature: 0.2,
-      response_format: { type: 'json_object' },
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: user }
-      ]
-    })
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${provider.apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: provider.model,
+        temperature: 0.2,
+        max_tokens: JSON_EXTRACTION_MAX_TOKENS,
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'user', content: `Transcript:\n${params.transcript}` }
+        ]
+      })
     },
     CHAT_TIMEOUT_MS,
     'Template structuring request'
@@ -224,23 +241,25 @@ export async function synthesizeTemplateContextParagraph(params: {
     transcript: tailTranscript(params.transcript, TRANSCRIPT_TAIL_CHARS)
   }
   const user = JSON.stringify(userPayload)
+  const provider = resolveChatProvider(params.apiKey, 'paragraph')
 
   const res = await fetchWithTimeout(
-    CHAT_URL,
+    provider.url,
     {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${params.apiKey}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      model: templateParagraphModel(),
-      temperature: 0.3,
-      messages: [
-        { role: 'system', content: TEMPLATE_PARAGRAPH_SYSTEM },
-        { role: 'user', content: user }
-      ]
-    })
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${provider.apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: provider.model,
+        temperature: 0.3,
+        max_tokens: PARAGRAPH_MAX_TOKENS,
+        messages: [
+          { role: 'system', content: TEMPLATE_PARAGRAPH_SYSTEM },
+          { role: 'user', content: user }
+        ]
+      })
     },
     CHAT_TIMEOUT_MS,
     'Template paragraph request'
