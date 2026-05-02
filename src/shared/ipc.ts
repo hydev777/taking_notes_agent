@@ -1,4 +1,5 @@
 import type { TemplateId } from './templateId'
+import type { TrialState } from './trial'
 import type { TemplatePayload } from './zodTemplates'
 
 export type SessionProcessingStatus = 'pending' | 'processing' | 'completed' | 'failed'
@@ -63,6 +64,7 @@ export type GetChangelogResult =
   | { ok: false; error: string }
 
 export type IpcApi = {
+  getTrialState: () => Promise<TrialState>
   getProfileName: () => Promise<string | null>
   setProfileName: (name: string) => Promise<void>
   listSessions: () => Promise<SessionListItem[]>

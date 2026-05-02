@@ -8,6 +8,7 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "dist": "electron-vite build && electron-builder",
+    "dist:trial": "cross-env TNA_TRIAL=1 NODE_ENV=production electron-vite build && electron-builder -c.productName=\"Taking Notes Agent Demo\"",
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p tsconfig.node.json",
     "rebuild:native": "electron-rebuild -f -w better-sqlite3",
@@ -20,6 +21,7 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "uuid": "^11.0.5",
+    "winreg": "^1.2.5",
     "zod": "^3.24.2"
   },
   "devDependencies": {
@@ -30,7 +32,9 @@
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
     "@types/uuid": "^10.0.0",
+    "@types/winreg": "^1.2.36",
     "@vitejs/plugin-react": "^4.3.4",
+    "cross-env": "^7.0.3",
     "electron": "^33.3.1",
     "electron-builder": "^25.1.8",
     "electron-vite": "^2.3.0",
@@ -40,6 +44,7 @@
   "build": {
     "appId": "com.takingnotes.agent",
     "productName": "Taking Notes Agent",
+    "npmRebuild": false,
     "directories": {
       "output": "release"
     },

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
+import { useTrial } from '../context/TrialContext'
 import type { SessionListItem, SessionProcessingStatus } from '@shared/ipc'
 import { TEMPLATE_LABELS } from '@shared/templateId'
 import type { TemplateId } from '@shared/templateId'
@@ -112,6 +113,8 @@ function statusLabel(status: SessionProcessingStatus): string {
 }
 
 export function HistoryView(props: Props): ReactElement {
+  const { trial } = useTrial()
+  const trialExpired = trial.isExpired
   const [history, setHistory] = useState<SessionListItem[]>([])
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -232,7 +235,12 @@ export function HistoryView(props: Props): ReactElement {
                   </button>
                   <button
                     type="button"
-                    disabled={!!busy || s.processingStatus === 'processing' || s.processingStatus === 'completed'}
+                    disabled={
+                      trialExpired ||
+                      !!busy ||
+                      s.processingStatus === 'processing' ||
+                      s.processingStatus === 'completed'
+                    }
                     onClick={() => void retryProcessing(s.id)}
                   >
                     Transcribe Call and Fill Template
@@ -320,6 +328,7 @@ export function HistoryView(props: Props): ReactElement {
                     <button
                       type="button"
                       disabled={
+                        trialExpired ||
                         !!busy ||
                         history.find((item) => item.id === sessionId)?.processingStatus === 'processing' ||
                         history.find((item) => item.id === sessionId)?.processingStatus === 'completed'

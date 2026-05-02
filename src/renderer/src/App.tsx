@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useState, type ReactElement } from 'react'
+import { useTrial } from './context/TrialContext'
 import { ChangelogView } from './components/ChangelogView'
 import { HistoryView } from './components/HistoryView'
 import { HomeView } from './components/HomeView'
 import { ProfileView } from './components/ProfileView'
-type TabKey = 'profile' | 'home' | 'history' | 'changelog'
+import { TutorialView } from './components/TutorialView'
+type TabKey = 'profile' | 'home' | 'history' | 'tutorial' | 'changelog'
 
 export function App(): ReactElement {
+  const { trial } = useTrial()
   const [profileName, setProfileName] = useState<string>('')
   const [activeTab, setActiveTab] = useState<TabKey>('home')
   const [historyRefreshToken, setHistoryRefreshToken] = useState<number>(0)
@@ -56,6 +59,9 @@ export function App(): ReactElement {
     if (activeTab === 'changelog') {
       return 'Changelog'
     }
+    if (activeTab === 'tutorial') {
+      return 'Tutorial'
+    }
     return 'AI collaborator'
   }, [activeTab])
 
@@ -70,6 +76,14 @@ export function App(): ReactElement {
         </div>
         <span className="topbar-meta">Operator + AI: {profileName || 'Not set'}</span>
       </header>
+
+      {trial.isExpired ? (
+        <p className="warnings" role="status" style={{ margin: '0 1rem 0.75rem' }}>
+          Trial expired
+          {trial.daysRemaining < 0 ? ` ${Math.abs(trial.daysRemaining)} day(s) ago` : ''} — recording and AI
+          processing are disabled. History remains viewable and emails can still be re-sent.
+        </p>
+      ) : null}
 
       <div className="workspace-shell">
         <aside className="sidebar" role="tablist" aria-label="Main Navigation">
@@ -104,6 +118,17 @@ export function App(): ReactElement {
             aria-selected={activeTab === 'history'}
           >
             History
+          </button>
+          <button
+            type="button"
+            className={activeTab === 'tutorial' ? 'primary' : undefined}
+            onClick={() => setActiveTab('tutorial')}
+            disabled={tabsBlockedByCapture}
+            title={tabsBlockedByCapture ? 'Stop or cancel current recording/share first.' : undefined}
+            role="tab"
+            aria-selected={activeTab === 'tutorial'}
+          >
+            Tutorial
           </button>
           <button
             type="button"
@@ -148,6 +173,9 @@ export function App(): ReactElement {
 
             <section hidden={activeTab !== 'history'} aria-hidden={activeTab !== 'history'}>
               <HistoryView refreshToken={historyRefreshToken} latestProcessedSessionId={lastProcessedSessionId} />
+            </section>
+            <section hidden={activeTab !== 'tutorial'} aria-hidden={activeTab !== 'tutorial'}>
+              <TutorialView />
             </section>
             <section hidden={activeTab !== 'changelog'} aria-hidden={activeTab !== 'changelog'}>
               <ChangelogView />

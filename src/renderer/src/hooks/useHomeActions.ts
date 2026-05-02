@@ -1,4 +1,5 @@
 import { useCallback } from 'react'
+import { TRIAL_EXPIRED_USER_MESSAGE } from '@shared/trial'
 import type { CaptureAudioSource, useRecorder } from './useRecorder'
 
 type RecorderApi = ReturnType<typeof useRecorder>
@@ -27,6 +28,11 @@ export function useHomeActions(params: Params): {
         params.onRequireProfile()
         return
       }
+      const trial = await window.api.getTrialState()
+      if (trial.isExpired) {
+        params.onError(TRIAL_EXPIRED_USER_MESSAGE)
+        return
+      }
       const id = crypto.randomUUID()
       await params.recorder.start(id, source)
     } catch (e) {
@@ -46,6 +52,11 @@ export function useHomeActions(params: Params): {
       }
       params.onBusyMessage('AI assistant is transcribing the call...')
       const n = (await window.api.getProfileName())?.trim() ?? ''
+      const trial = await window.api.getTrialState()
+      if (trial.isExpired) {
+        params.onError(TRIAL_EXPIRED_USER_MESSAGE)
+        return
+      }
       const buf = await chunks.blob.arrayBuffer()
       const res = await window.api.processCallAudio({
         sessionId: chunks.sessionId,

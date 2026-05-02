@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type MouseEvent, type ReactElement } from 'react'
 import type { DisplayMediaSourceOption } from '@shared/ipc'
+import { useTrial } from '../context/TrialContext'
 import { useHomeActions } from '../hooks/useHomeActions'
 import { type CaptureAudioSource, useRecorder } from '../hooks/useRecorder'
 
@@ -10,6 +11,8 @@ type Props = {
 }
 
 export function HomeView(props: Props): ReactElement {
+  const { trial } = useTrial()
+  const trialExpired = trial.isExpired
   const recorder = useRecorder()
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -93,7 +96,7 @@ export function HomeView(props: Props): ReactElement {
             <select
               id="capture-source"
               value={captureSource}
-              disabled={recorder.state.status === 'recording' || !!busy}
+              disabled={trialExpired || recorder.state.status === 'recording' || !!busy}
               onChange={(e) => setCaptureSource(e.target.value as CaptureAudioSource)}
             >
               <option value="systemOnly">System only (caller voice via shared tab/window)</option>
@@ -140,30 +143,32 @@ export function HomeView(props: Props): ReactElement {
             })}
           </ol>
           <p className="muted">
-            {error || recorder.state.status === 'error'
-              ? 'AI assistant needs your attention. Fix the issue and retry.'
-              : busy ?? 'AI assistant is ready. Start recording to begin a new intake run.'}
+            {trialExpired
+              ? 'Trial expired — recording disabled.'
+              : error || recorder.state.status === 'error'
+                ? 'AI assistant needs your attention. Fix the issue and retry.'
+                : busy ?? 'AI assistant is ready. Start recording to begin a new intake run.'}
           </p>
         </div>
         <div className="row">
           <button
             type="button"
             className="primary"
-            disabled={recorder.state.status === 'recording' || !!busy}
+            disabled={trialExpired || recorder.state.status === 'recording' || !!busy}
             onClick={() => void startRecording(captureSource)}
           >
             Start recording
           </button>
           <button
             type="button"
-            disabled={recorder.state.status !== 'recording' || !!busy}
+            disabled={trialExpired || recorder.state.status !== 'recording' || !!busy}
             onClick={() => void stopRecording()}
           >
             Stop & process
           </button>
           <button
             type="button"
-            disabled={recorder.state.status !== 'recording' || !!busy}
+            disabled={trialExpired || recorder.state.status !== 'recording' || !!busy}
             onClick={stopWithoutProcessing}
           >
             Stop (No process)
@@ -172,11 +177,13 @@ export function HomeView(props: Props): ReactElement {
         <div className="assistant-hint">
           <p className="assistant-title">Next step guidance</p>
           <p className="muted">
-            {recorder.state.status === 'recording'
-              ? 'Keep recording while the call is active. Then click "Stop & process" so the AI assistant can prepare the intake draft.'
-              : busy
-                ? 'Processing is in progress. Once complete, you will be moved to History to review the AI-generated draft.'
-                : 'After processing, review transcript and template in History. Edit fields, confirm warnings, and copy the final output.'}
+            {trialExpired
+              ? 'Trial expired — use History to review past sessions or re-send email.'
+              : recorder.state.status === 'recording'
+                ? 'Keep recording while the call is active. Then click "Stop & process" so the AI assistant can prepare the intake draft.'
+                : busy
+                  ? 'Processing is in progress. Once complete, you will be moved to History to review the AI-generated draft.'
+                  : 'After processing, review transcript and template in History. Edit fields, confirm warnings, and copy the final output.'}
           </p>
         </div>
         {busy ? <p className="muted">{busy}</p> : null}

@@ -35,6 +35,7 @@ import {
 import { getSessionsDir } from './services/paths'
 import { buildValidationWarnings, detectCaseCategory } from './services/validation'
 import { registerDisplayMediaSupport } from './services/displayMedia'
+import { assertTrialActive, getTrialState, TrialExpiredError } from './services/trial'
 
 const SAFE_SESSION_ID_RE = /^[A-Za-z0-9_-]{1,80}$/
 const ALLOWED_IMPORT_EXTS = new Set(['.webm', '.wav', '.mp3', '.mpeg', '.m4a', '.ogg'])
@@ -201,6 +202,9 @@ function normalizeProcessingError(error: unknown): string {
   if (error instanceof EmptyAudioError) {
     return error.message
   }
+  if (error instanceof TrialExpiredError) {
+    return error.message
+  }
   const raw = error instanceof Error ? error.message : String(error)
   const lower = raw.toLowerCase()
   const category =
@@ -312,6 +316,9 @@ async function processSessionOnDiskFile(input: {
         // the file 3x just burns transcription quota for no benefit.
         break
       }
+      if (error instanceof TrialExpiredError) {
+        break
+      }
     }
   }
   const normalized = normalizeProcessingError(lastError)
@@ -381,6 +388,7 @@ function rowToRecord(row: DbSessionRow): SessionRecord {
 
 export function registerIpcHandlers(): void {
   registerDisplayMediaSupport()
+  ipcMain.handle('tna:get-trial-state', async () => getTrialState())
   ipcMain.handle('tna:get-profile', async () => getProfileName())
   ipcMain.handle('tna:set-profile', async (_e, name: string) => {
     setProfileName(name)
@@ -451,6 +459,7 @@ export function registerIpcHandlers(): void {
       input: { templateId: TemplateId; templateJson: string; transcript: string }
     ): Promise<{ ok: true; paragraph: string } | { ok: false; error: string }> => {
       try {
+        assertTrialActive()
         const apiKey = requireApiKey()
         const tid = templateIdSchema.parse(input.templateId)
         let data: Record<string, unknown>
@@ -472,7 +481,7 @@ export function registerIpcHandlers(): void {
         })
         return { ok: true as const, paragraph }
       } catch (e) {
-        // RateLimitError.message is already user-facing; do not wrap or prefix here.
+        // RateLimitError / TrialExpiredError.message is already user-facing; do not wrap or prefix here.
         const msg = e instanceof Error ? e.message : String(e)
         return { ok: false as const, error: msg }
       }
@@ -485,6 +494,7 @@ export function registerIpcHandlers(): void {
       _e,
       input: { sessionId: string; audio: ArrayBuffer; mimeType: string; profileName: string }
     ) => {
+      assertTrialActive()
       const dir = getSessionsDir()
       const sessionId = assertSafeSessionId(input.sessionId)
       const ext = input.mimeType.includes('webm') ? '.webm' : '.bin'
@@ -536,6 +546,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(
     'tna:process-imported-file',
     async (_e, input: { sessionId: string; sourcePath: string; profileName: string }) => {
+      assertTrialActive()
       const dir = getSessionsDir()
       const sessionId = assertSafeSessionId(input.sessionId)
       const pendingSourcePath = pendingImportBySession.get(sessionId)
@@ -580,6 +591,7 @@ export function registerIpcHandlers(): void {
   )
 
   ipcMain.handle('tna:retry-session-processing', async (_e, sessionIdRaw: string) => {
+    assertTrialActive()
     const sessionId = assertSafeSessionId(sessionIdRaw)
     const row = getSessionRow(sessionId)
     if (!row) {

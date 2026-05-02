@@ -85,22 +85,29 @@ export function closeDb(): void {
   }
 }
 
-export function getProfileName(): string | null {
+export function getSetting(key: string): string | null {
   const stmt =
     stmtCache.getProfileName ??
     (stmtCache.getProfileName = getDb().prepare('SELECT value FROM settings WHERE key = ?'))
-  const row = stmt
-    .get('profileName') as { value: string } | undefined
+  const row = stmt.get(key) as { value: string } | undefined
   return row?.value ?? null
 }
 
-export function setProfileName(name: string): void {
+export function setSetting(key: string, value: string): void {
   const stmt =
     stmtCache.setProfileName ??
     (stmtCache.setProfileName = getDb().prepare(
       'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'
     ))
-  stmt.run('profileName', name.trim())
+  stmt.run(key, value)
+}
+
+export function getProfileName(): string | null {
+  return getSetting('profileName')
+}
+
+export function setProfileName(name: string): void {
+  setSetting('profileName', name.trim())
 }
 
 export type DbSessionRow = {

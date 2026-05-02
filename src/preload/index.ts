@@ -1,10 +1,12 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { DisplayMediaSourceOption, IpcApi } from '../shared/ipc'
+import type { TrialState } from '../shared/trial'
 
 const DISPLAY_MEDIA_PICKER = 'tna:display-media-picker'
 const DISPLAY_MEDIA_SUBMIT = 'tna:display-media-pick'
 
 const api: IpcApi = {
+  getTrialState: () => ipcRenderer.invoke('tna:get-trial-state') as Promise<TrialState>,
   getProfileName: () => ipcRenderer.invoke('tna:get-profile') as Promise<string | null>,
   setProfileName: (name: string) => ipcRenderer.invoke('tna:set-profile', name) as Promise<void>,
   listSessions: () => ipcRenderer.invoke('tna:list-sessions'),

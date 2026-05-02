@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 import dotenv from 'dotenv'
 import { registerIpcHandlers } from './ipc'
 import { getDb, onAppQuit } from './services/db'
+import { initTrialState } from './services/trial'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -58,9 +59,10 @@ function createWindow(): BrowserWindow {
 
 app
   .whenReady()
-  .then(() => {
+  .then(async () => {
     loadEnvFiles()
     getDb()
+    await initTrialState()
     registerIpcHandlers()
     onAppQuit()
     createWindow()

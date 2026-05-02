@@ -1,4 +1,5 @@
 import { useCallback } from 'react'
+import { TRIAL_EXPIRED_USER_MESSAGE } from '@shared/trial'
 import type { SessionListItem, SessionRecord } from '../../../shared/ipc'
 import type { TemplateId } from '../../../shared/templateId'
 import { fieldsByTemplateId } from '../../../shared/templateFormMeta'
@@ -100,6 +101,11 @@ export function useHistoryActions(params: Params): {
   const retryProcessing = useCallback(
     async (id: string) => {
       params.onError(null)
+      const trial = await window.api.getTrialState()
+      if (trial.isExpired) {
+        params.onError(TRIAL_EXPIRED_USER_MESSAGE)
+        return
+      }
       params.onBusyMessage('Running AI transcription and template fill…')
       try {
         await window.api.retrySessionProcessing(id)

@@ -83,6 +83,18 @@ Create a Windows installer under `release/`:
 npm run dist
 ```
 
+**Trial build (3-day read-only expiry after install):** same installer flow, but the packaged app enforces a 3-day trial (recording + AI blocked after expiry; History + email still work). Development (`npm run dev`) never enables the trial.
+
+```bash
+npm run dist:trial
+```
+
+Trial packaging uses the product name **Taking Notes Agent Demo** so it is easy to tell apart from the normal build: installer `release/Taking Notes Agent Demo Setup <version>.exe`, unpacked app `release/win-unpacked/Taking Notes Agent Demo.exe` (version comes from `package.json`).
+
+**Windows `EPERM` unlink on `better_sqlite3.node`:** That file is locked while Electron is running (for example `npm run dev`, the Taking Notes Agent window, or another Cursor terminal that started the app). Quit the app and stop the dev server, then run `npm run dist` or `npm run dist:trial` again. Native `better-sqlite3` is rebuilt for Electron on `npm install` (`postinstall`); packaging is configured not to run a second rebuild that would delete that loaded `.node` file.
+
+After changing the `electron` devDependency version, run `npm run rebuild:native` once before packaging.
+
 ## Data & privacy
 
 Sessions (audio file, transcript, template JSON, profile name, timestamps) are stored under the Electron **userData** directory. Recording laws and employer/CTM policies are your responsibility; the UI includes a short notice.
@@ -110,6 +122,8 @@ What it does:
 
 ## Scripts
 
-- `npm run dev` — electron-vite dev
+- `npm run dev` — electron-vite dev (trial **off**)
 - `npm run build` — compile + pack
+- `npm run dist` — production installer (trial **off**)
+- `npm run dist:trial` — production installer with **3-day trial** enabled
 - `npm run typecheck` — TypeScript checks
