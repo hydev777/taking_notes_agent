@@ -1,6 +1,6 @@
 # Taking Notes Agent
 
-Electron desktop app for **CTM-style calls**: capture **browser tab audio + microphone**, save call audio locally, transcribe with OpenAI, fill structured intake templates, and review/edit sessions with a collaborative AI-style workflow.
+Electron desktop app for **CTM-style calls**: capture **browser tab audio + microphone**, save call audio locally, transcribe with Groq (free tier, Whisper Large v3 Turbo), fill structured intake templates with Llama 3.3 70B, and review/edit sessions with a collaborative AI-style workflow.
 
 ## Current features
 
@@ -55,7 +55,7 @@ Copy `.env.example` to `.env` in the project folder **or** put `.env` in the app
 
 Required:
 
-- `OPENAI_API_KEY`
+- `GROQ_API_KEY` — free key at https://console.groq.com (no card required). Add it to your actual `.env`, not just `.env.example`.
 
 Optional (for email):
 

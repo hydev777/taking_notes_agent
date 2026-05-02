@@ -29,7 +29,7 @@ import {
   structureTemplateFromTranscript,
   synthesizeTemplateContextParagraph,
   transcribeAudioFile
-} from './services/openai'
+} from './services/llm'
 import { getSessionsDir } from './services/paths'
 import { buildValidationWarnings, detectCaseCategory } from './services/validation'
 import { registerDisplayMediaSupport } from './services/displayMedia'
@@ -40,9 +40,11 @@ const pendingImportBySession = new Map<string, string>()
 const AUTO_PROCESS_MAX_ATTEMPTS = 3
 
 function requireApiKey(): string {
-  const key = process.env.OPENAI_API_KEY
+  const key = process.env.GROQ_API_KEY
   if (!key) {
-    throw new Error('Missing OPENAI_API_KEY in environment (.env in project or userData).')
+    throw new Error(
+      'Missing GROQ_API_KEY in environment (.env in project or userData). Free key at https://console.groq.com.'
+    )
   }
   return key
 }
@@ -196,7 +198,7 @@ function normalizeProcessingError(error: unknown): string {
   const category =
     lower.includes('timeout') || lower.includes('connect') || lower.includes('socket')
       ? 'network'
-      : lower.includes('openai') || lower.includes('transcription failed') || lower.includes('llm')
+      : lower.includes('groq') || lower.includes('transcription failed') || lower.includes('llm')
         ? 'api'
         : lower.includes('validation') || lower.includes('json')
           ? 'validation'

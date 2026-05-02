@@ -2,21 +2,19 @@ import { readFile } from 'node:fs/promises'
 import { parseLlmTemplatePayload, type TemplatePayload } from '../../shared/zodTemplates'
 import type { TemplateId } from '../../shared/templateId'
 
-const TRANSCRIBE_URL = 'https://api.openai.com/v1/audio/transcriptions'
-const CHAT_URL = 'https://api.openai.com/v1/chat/completions'
+const GROQ_BASE_URL = process.env.GROQ_BASE_URL?.trim() || 'https://api.groq.com/openai/v1'
+const TRANSCRIBE_URL = `${GROQ_BASE_URL}/audio/transcriptions`
+const CHAT_URL = `${GROQ_BASE_URL}/chat/completions`
 const TRANSCRIBE_TIMEOUT_MS = 90_000
 const CHAT_TIMEOUT_MS = 45_000
 const TRANSCRIBE_MAX_ATTEMPTS = 3
+const CHAT_MAX_ATTEMPTS = 3
 
-/** Cheap OpenAI transcription model (~50% of whisper-1 per minute). Override via OPENAI_TRANSCRIBE_MODEL (e.g. "whisper-1" to roll back). */
-const DEFAULT_TRANSCRIBE_MODEL = 'gpt-4o-mini-transcribe'
+/** Groq Whisper model. Override via GROQ_TRANSCRIBE_MODEL (e.g. "whisper-large-v3" for slower but slightly more accurate). */
+const DEFAULT_TRANSCRIBE_MODEL = 'whisper-large-v3-turbo'
 
-/** OpenAI chat model used when DEEPSEEK_API_KEY is unset. Override via OPENAI_CHAT_MODEL / OPENAI_TEMPLATE_PARAGRAPH_MODEL. */
-const DEFAULT_OPENAI_CHAT_MODEL = 'gpt-4o-mini'
-
-/** DeepSeek defaults; used when DEEPSEEK_API_KEY is set. */
-const DEFAULT_DEEPSEEK_BASE_URL = 'https://api.deepseek.com'
-const DEFAULT_DEEPSEEK_CHAT_MODEL = 'deepseek-v4-flash'
+/** Groq chat model. Override via GROQ_CHAT_MODEL (e.g. "llama-3.1-8b-instant" for faster + cheaper quota usage). */
+const DEFAULT_CHAT_MODEL = 'llama-3.3-70b-versatile'
 
 /** Caps to prevent runaway completions. */
 const JSON_EXTRACTION_MAX_TOKENS = 700
@@ -25,28 +23,43 @@ const PARAGRAPH_MAX_TOKENS = 220
 /** Tail of the transcript fed to paragraph synthesis. ~1k tokens; structured fields already carry the facts. */
 const TRANSCRIPT_TAIL_CHARS = 4_000
 
-type ChatKind = 'json' | 'paragraph'
-
-type ChatProvider = { url: string; apiKey: string; model: string }
-
-function resolveChatProvider(openaiKey: string, kind: ChatKind): ChatProvider {
-  const dsKey = process.env.DEEPSEEK_API_KEY?.trim()
-  if (dsKey) {
-    const base = process.env.DEEPSEEK_BASE_URL?.trim() || DEFAULT_DEEPSEEK_BASE_URL
-    const model = process.env.DEEPSEEK_CHAT_MODEL?.trim() || DEFAULT_DEEPSEEK_CHAT_MODEL
-    return { url: `${base}/chat/completions`, apiKey: dsKey, model }
-  }
-  const override =
-    kind === 'json'
-      ? process.env.OPENAI_CHAT_MODEL?.trim()
-      : process.env.OPENAI_TEMPLATE_PARAGRAPH_MODEL?.trim()
-  return { url: CHAT_URL, apiKey: openaiKey, model: override || DEFAULT_OPENAI_CHAT_MODEL }
+function transcribeModel(): string {
+  return process.env.GROQ_TRANSCRIBE_MODEL?.trim() || DEFAULT_TRANSCRIBE_MODEL
 }
 
+function chatModel(): string {
+  return process.env.GROQ_CHAT_MODEL?.trim() || DEFAULT_CHAT_MODEL
+}
+
+// Groq JSON-mode quirk: when response_format is { type: 'json_object' }, Groq returns HTTP 400
+// unless the prompt contains the literal word "JSON" somewhere. SYSTEM_PROMPT below already
+// satisfies this ("Output ONLY valid JSON..."); keep it that way during any future tightening.
 const TEMPLATE_PARAGRAPH_SYSTEM = `Write ONE English paragraph for a US law firm case note (DTLA).
 Input: labeled template fields + call transcript.
 Weave field values into a natural professional summary; use the transcript only to clarify what the fields already say.
 Output ONLY plain text (no markdown, lists, or headings). Skip empty fields. Never invent facts.`
+
+const SYSTEM_PROMPT = `Extract intake JSON from a US law firm call transcript (English).
+Output ONLY valid JSON: {"templateId":"generalNewClients"|"lemonLaw"|"uberRequest","data":{...}}.
+No markdown, no prose. Empty string for unknown fields. Never invent facts.
+
+Pick ONE templateId:
+- lemonLaw: defective vehicle / lemon law matter.
+- uberRequest: ride/trip pickup-dropoff request.
+- generalNewClients: any other intake.
+
+generalNewClients comments rules (based on caseType):
+- Wrongful Termination: include company/workplace exact name, reason of termination, salary, time with company.
+- Injury/Accident/Assault/Slip-Fall: include when, where, how, police report YES/NO, injury details.
+- Workers' Comp Injury: include company/workplace exact name, when, how, injury details.
+- Other: brief rich summary (what, how, why, key details).
+
+Field keys (all strings):
+generalNewClients: name, phoneNumber, caseType, office (default "DTLA"), signed (default "Pending"), city, date, email, comments, howDidYouHearAboutUs, scheduleCallBack, agent
+lemonLaw: name, caseType (default "Lemon Law"), office (default "DTLA"), phoneNumber, city, date, email, carYearMakeModel, yearOfPurchase, whereBoughtLeasedOrPurchased, newOrUsed, mileageThenOrNow, commentsOrIssues, repairShopVisitsCount, warrantyEnd, howDidYouHearAboutUs, scheduleCallBack, agent
+uberRequest: client, phoneNumber, time, pickUp, dropOff, comments, agent
+
+Leave "agent" empty; it is filled in post-processing.`
 
 function tailTranscript(transcript: string, maxChars: number): string {
   const t = transcript.trim()
@@ -97,27 +110,55 @@ function isRetryableFetchError(error: unknown): boolean {
   )
 }
 
-const SYSTEM_PROMPT = `Extract intake JSON from a US law firm call transcript (English).
-Output ONLY valid JSON: {"templateId":"generalNewClients"|"lemonLaw"|"uberRequest","data":{...}}.
-No markdown, no prose. Empty string for unknown fields. Never invent facts.
+function isRetryableStatus(status: number): boolean {
+  return status === 429 || status >= 500
+}
 
-Pick ONE templateId:
-- lemonLaw: defective vehicle / lemon law matter.
-- uberRequest: ride/trip pickup-dropoff request.
-- generalNewClients: any other intake.
-
-generalNewClients comments rules (based on caseType):
-- Wrongful Termination: include company/workplace exact name, reason of termination, salary, time with company.
-- Injury/Accident/Assault/Slip-Fall: include when, where, how, police report YES/NO, injury details.
-- Workers' Comp Injury: include company/workplace exact name, when, how, injury details.
-- Other: brief rich summary (what, how, why, key details).
-
-Field keys (all strings):
-generalNewClients: name, phoneNumber, caseType, office (default "DTLA"), signed (default "Pending"), city, date, email, comments, howDidYouHearAboutUs, scheduleCallBack, agent
-lemonLaw: name, caseType (default "Lemon Law"), office (default "DTLA"), phoneNumber, city, date, email, carYearMakeModel, yearOfPurchase, whereBoughtLeasedOrPurchased, newOrUsed, mileageThenOrNow, commentsOrIssues, repairShopVisitsCount, warrantyEnd, howDidYouHearAboutUs, scheduleCallBack, agent
-uberRequest: client, phoneNumber, time, pickUp, dropOff, comments, agent
-
-Leave "agent" empty; it is filled in post-processing.`
+/**
+ * POSTs to the Groq chat endpoint with the same retry posture as transcription:
+ * 3 attempts, exponential backoff, retry on socket errors plus HTTP 429 / 5xx.
+ * Free tiers throw transient 429s more often than paid, so this matters.
+ */
+async function chatWithRetry(
+  apiKey: string,
+  body: unknown,
+  timeoutLabel: string
+): Promise<Response> {
+  let lastError: unknown = null
+  for (let attempt = 1; attempt <= CHAT_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      const res = await fetchWithTimeout(
+        CHAT_URL,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(body)
+        },
+        CHAT_TIMEOUT_MS,
+        timeoutLabel
+      )
+      if (res.ok || !isRetryableStatus(res.status) || attempt === CHAT_MAX_ATTEMPTS) {
+        return res
+      }
+      // Retryable HTTP error: drain body so the connection is freed, then back off.
+      await res.text().catch(() => undefined)
+      lastError = new Error(`HTTP ${res.status}`)
+    } catch (error) {
+      lastError = error
+      const retryable = isRetryableFetchError(error)
+      if (!retryable || attempt === CHAT_MAX_ATTEMPTS) {
+        throw error
+      }
+    }
+    await sleep(attempt * 700)
+  }
+  throw new Error(
+    `${timeoutLabel} failed after ${CHAT_MAX_ATTEMPTS} attempts: ${String(lastError)}`
+  )
+}
 
 export async function transcribeAudioFile(params: {
   filePath: string
@@ -132,7 +173,11 @@ export async function transcribeAudioFile(params: {
     try {
       const body = new FormData()
       body.append('file', new Blob([buffer], { type: params.mimeType }), params.filename)
-      body.append('model', process.env.OPENAI_TRANSCRIBE_MODEL?.trim() || DEFAULT_TRANSCRIBE_MODEL)
+      body.append('model', transcribeModel())
+      // Pin English: DTLA calls are English-only. Without this, Whisper auto-detect
+      // occasionally mis-tags heavily Spanish-accented English on whisper-large-v3-turbo
+      // and starts translating instead of transcribing.
+      body.append('language', 'en')
       res = await fetchWithTimeout(
         TRANSCRIBE_URL,
         {
@@ -181,28 +226,19 @@ export async function structureTemplateFromTranscript(params: {
   // agentName is intentionally not sent to the LLM: it is filled in post-processing
   // by applyAgentToPayload (src/main/ipc.ts), so the user message stays minimal.
   void params.agentName
-  const provider = resolveChatProvider(params.apiKey, 'json')
 
-  const res = await fetchWithTimeout(
-    provider.url,
+  const res = await chatWithRetry(
+    params.apiKey,
     {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${provider.apiKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: provider.model,
-        temperature: 0.2,
-        max_tokens: JSON_EXTRACTION_MAX_TOKENS,
-        response_format: { type: 'json_object' },
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: `Transcript:\n${params.transcript}` }
-        ]
-      })
+      model: chatModel(),
+      temperature: 0.2,
+      max_tokens: JSON_EXTRACTION_MAX_TOKENS,
+      response_format: { type: 'json_object' },
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: `Transcript:\n${params.transcript}` }
+      ]
     },
-    CHAT_TIMEOUT_MS,
     'Template structuring request'
   )
 
@@ -241,27 +277,18 @@ export async function synthesizeTemplateContextParagraph(params: {
     transcript: tailTranscript(params.transcript, TRANSCRIPT_TAIL_CHARS)
   }
   const user = JSON.stringify(userPayload)
-  const provider = resolveChatProvider(params.apiKey, 'paragraph')
 
-  const res = await fetchWithTimeout(
-    provider.url,
+  const res = await chatWithRetry(
+    params.apiKey,
     {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${provider.apiKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: provider.model,
-        temperature: 0.3,
-        max_tokens: PARAGRAPH_MAX_TOKENS,
-        messages: [
-          { role: 'system', content: TEMPLATE_PARAGRAPH_SYSTEM },
-          { role: 'user', content: user }
-        ]
-      })
+      model: chatModel(),
+      temperature: 0.3,
+      max_tokens: PARAGRAPH_MAX_TOKENS,
+      messages: [
+        { role: 'system', content: TEMPLATE_PARAGRAPH_SYSTEM },
+        { role: 'user', content: user }
+      ]
     },
-    CHAT_TIMEOUT_MS,
     'Template paragraph request'
   )
 
