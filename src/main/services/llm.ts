@@ -114,6 +114,132 @@ function isRetryableStatus(status: number): boolean {
   return status === 429 || status >= 500
 }
 
+/** Marker class so ipc.ts can detect rate-limit errors via instanceof, no string sniffing. */
+export class RateLimitError extends Error {
+  readonly waitMs: number
+  readonly resetAt: Date
+  constructor(waitMs: number, resetAt: Date, message: string) {
+    super(message)
+    this.name = 'RateLimitError'
+    this.waitMs = waitMs
+    this.resetAt = resetAt
+  }
+}
+
+/** Parse Go-style durations the AI service returns ("7h32m18.42s", "2m59.56s", "500ms"). */
+function parseGoDurationMs(input: string): number | null {
+  const re = /(\d+(?:\.\d+)?)(h|m|s|ms)/g
+  let match: RegExpExecArray | null
+  let total = 0
+  let matched = false
+  while ((match = re.exec(input)) !== null) {
+    matched = true
+    const value = Number(match[1])
+    const unit = match[2]
+    total +=
+      unit === 'h'
+        ? value * 3_600_000
+        : unit === 'm'
+          ? value * 60_000
+          : unit === 'ms'
+            ? value
+            : value * 1_000
+  }
+  return matched ? Math.round(total) : null
+}
+
+function parseRetryAfterHeaderMs(value: string | null): number | null {
+  if (!value) {
+    return null
+  }
+  const trimmed = value.trim()
+  const seconds = Number(trimmed)
+  if (Number.isFinite(seconds) && seconds >= 0) {
+    return Math.round(seconds * 1000)
+  }
+  // RFC 7231 also allows an HTTP date.
+  const date = Date.parse(trimmed)
+  return Number.isFinite(date) ? Math.max(0, date - Date.now()) : null
+}
+
+function formatLocalClock(at: Date): string {
+  return at.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+}
+
+function formatHumanDuration(ms: number): string {
+  if (ms < 60_000) {
+    const s = Math.max(1, Math.round(ms / 1000))
+    return `${s} second${s === 1 ? '' : 's'}`
+  }
+  const totalMin = Math.round(ms / 60_000)
+  if (totalMin < 60) {
+    return `${totalMin} minute${totalMin === 1 ? '' : 's'}`
+  }
+  const h = Math.floor(totalMin / 60)
+  const m = totalMin % 60
+  return m === 0 ? `${h}h` : `${h}h ${m}m`
+}
+
+/**
+ * Reads the 429 body once, then returns the parsed retry duration plus the raw body.
+ * waitMs is null when this 429 was not actually a rate_limit_exceeded (e.g. abuse limiter,
+ * malformed payload); the bodyText is always returned so callers can include it in a
+ * diagnostic fallback without double-reading the response stream.
+ */
+async function parseRateLimit429(
+  res: Response
+): Promise<{ waitMs: number | null; bodyText: string }> {
+  const bodyText = await res.text().catch(() => '')
+  let bodyMessage = ''
+  let parsedCode = ''
+  try {
+    const j = JSON.parse(bodyText) as { error?: { message?: string; code?: string } }
+    bodyMessage = j.error?.message ?? ''
+    parsedCode = j.error?.code ?? ''
+  } catch {
+    /* non-JSON body; keep going */
+  }
+  if (parsedCode && parsedCode !== 'rate_limit_exceeded') {
+    return { waitMs: null, bodyText }
+  }
+  const candidates: number[] = []
+  const headerMs = parseRetryAfterHeaderMs(res.headers.get('retry-after'))
+  if (headerMs != null) {
+    candidates.push(headerMs)
+  }
+  for (const h of ['x-ratelimit-reset-requests', 'x-ratelimit-reset-tokens']) {
+    const v = res.headers.get(h)
+    const ms = v ? parseGoDurationMs(v) : null
+    if (ms != null) {
+      candidates.push(ms)
+    }
+  }
+  const bodyDurationMatch = bodyMessage.match(/try again in ([0-9hms.\s]+?)[.\s]/i)
+  if (bodyDurationMatch) {
+    const ms = parseGoDurationMs(bodyDurationMatch[1].replace(/\s/g, ''))
+    if (ms != null) {
+      candidates.push(ms)
+    }
+  }
+  const waitMs = candidates.length > 0 ? Math.max(...candidates) : 60_000
+  return { waitMs, bodyText }
+}
+
+function buildRateLimitError(waitMs: number): RateLimitError {
+  const resetAt = new Date(Date.now() + waitMs)
+  const human = formatHumanDuration(waitMs)
+  const isLong = waitMs >= 60 * 60 * 1000
+  // For sub-minute waits the wall-clock time is noise; just say "in 45 seconds".
+  // For longer waits, anchoring to the wall clock helps the user plan around the wait.
+  const message =
+    waitMs < 60_000
+      ? `The AI service is busy right now. Try again in ${human}.`
+      : isLong
+        ? `The AI service is over its daily limit. Try again at ${formatLocalClock(resetAt)} (in ${human}).`
+        : `The AI service is busy right now. Try again at ${formatLocalClock(resetAt)} (in ${human}).`
+  return new RateLimitError(waitMs, resetAt, message)
+}
+
 /**
  * POSTs to the Groq chat endpoint with the same retry posture as transcription:
  * 3 attempts, exponential backoff, retry on socket errors plus HTTP 429 / 5xx.
@@ -140,12 +266,26 @@ async function chatWithRetry(
         CHAT_TIMEOUT_MS,
         timeoutLabel
       )
-      if (res.ok || !isRetryableStatus(res.status) || attempt === CHAT_MAX_ATTEMPTS) {
+      if (res.ok) {
         return res
       }
-      // Retryable HTTP error: drain body so the connection is freed, then back off.
-      await res.text().catch(() => undefined)
-      lastError = new Error(`HTTP ${res.status}`)
+      if (res.status === 429) {
+        const { waitMs } = await parseRateLimit429(res)
+        if (waitMs == null) {
+          // 429 not from rate-limiting (e.g. abuse limiter); let caller throw with body.
+          return res
+        }
+        if (waitMs > 5_000 || attempt === CHAT_MAX_ATTEMPTS) {
+          throw buildRateLimitError(waitMs)
+        }
+        lastError = new Error('HTTP 429')
+      } else if (isRetryableStatus(res.status) && attempt < CHAT_MAX_ATTEMPTS) {
+        // Generic 5xx: drain body so the connection is freed, then back off.
+        await res.text().catch(() => undefined)
+        lastError = new Error(`HTTP ${res.status}`)
+      } else {
+        return res
+      }
     } catch (error) {
       lastError = error
       const retryable = isRetryableFetchError(error)
@@ -207,6 +347,13 @@ export async function transcribeAudioFile(params: {
   }
 
   if (!res.ok) {
+    if (res.status === 429) {
+      const { waitMs, bodyText } = await parseRateLimit429(res)
+      if (waitMs != null) {
+        throw buildRateLimitError(waitMs)
+      }
+      throw new Error(`Transcription failed (429): ${bodyText}`)
+    }
     const errText = await res.text()
     throw new Error(`Transcription failed (${res.status}): ${errText}`)
   }
