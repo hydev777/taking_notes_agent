@@ -126,6 +126,60 @@ export class RateLimitError extends Error {
   }
 }
 
+/**
+ * Marker class for transcripts that look like Whisper silence-hallucination
+ * ("Thank you. Thank you. Thank you."). Means the audio file was effectively
+ * silent and the model fell back to short repeated phrases from its training data.
+ * ipc.ts uses this to short-circuit the outer retry loop (re-uploading the same
+ * silent file 3x is just wasted quota).
+ */
+export class EmptyAudioError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'EmptyAudioError'
+  }
+}
+
+/** Phrases Whisper emits when fed silence (lowercased, trimmed of trailing punctuation noise). */
+const WHISPER_HALLUCINATION_PHRASES = new Set([
+  'thank you.',
+  'thanks.',
+  'thanks for watching.',
+  'thanks for watching!',
+  'you.',
+  'bye.',
+  'okay.',
+  '.',
+  '[music]',
+  '[applause]',
+  '\u266a'
+])
+
+const HALLUCINATION_MAX_UNIQUE_LEN = 15
+
+/** True when the (already trimmed) transcript looks like Whisper silence-hallucination. */
+export function looksLikeWhisperHallucination(text: string): boolean {
+  const compact = text.replace(/\s+/g, ' ').trim()
+  if (compact.replace(/[\s.,!?]/g, '').length < 4) {
+    return true
+  }
+  const sentences = compact
+    .split(/(?<=[.!?])\s+|\n+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0)
+  if (sentences.length === 0) {
+    return true
+  }
+  const unique = new Set(sentences.map((s) => s.toLowerCase()))
+  if (unique.size === 1) {
+    const only = [...unique][0]
+    if (WHISPER_HALLUCINATION_PHRASES.has(only) || only.length <= HALLUCINATION_MAX_UNIQUE_LEN) {
+      return true
+    }
+  }
+  return false
+}
+
 /** Parse Go-style durations the AI service returns ("7h32m18.42s", "2m59.56s", "500ms"). */
 function parseGoDurationMs(input: string): number | null {
   const re = /(\d+(?:\.\d+)?)(h|m|s|ms)/g
@@ -362,7 +416,13 @@ export async function transcribeAudioFile(params: {
   if (!json.text) {
     throw new Error('Transcription response missing text')
   }
-  return json.text.trim()
+  const text = json.text.trim()
+  if (looksLikeWhisperHallucination(text)) {
+    throw new EmptyAudioError(
+      "No speech was detected in the recording. In Chrome's share dialog, pick the CTM tab and tick 'Share tab audio' (bottom-left), then re-record."
+    )
+  }
+  return text
 }
 
 export async function structureTemplateFromTranscript(params: {

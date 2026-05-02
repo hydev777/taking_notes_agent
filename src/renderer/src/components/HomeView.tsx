@@ -14,9 +14,7 @@ export function HomeView(props: Props): ReactElement {
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [displayPickerSources, setDisplayPickerSources] = useState<DisplayMediaSourceOption[] | null>(null)
-  const [captureSource, setCaptureSource] = useState<CaptureAudioSource>(() =>
-    /Windows/i.test(navigator.userAgent) ? 'systemOnly' : 'micOnly'
-  )
+  const [captureSource, setCaptureSource] = useState<CaptureAudioSource>('systemAndMic')
 
   const { startRecording, stopRecording, stopWithoutProcessing } = useHomeActions({
     recorder,
@@ -86,8 +84,8 @@ export function HomeView(props: Props): ReactElement {
         </div>
         <p className="muted">
           Your AI collaborator captures the call, transcribes the conversation, fills structured
-          fields, and prepares the session for review. Default source prioritizes system audio to
-          reduce repeated transcript loops.
+          fields, and prepares the session for review. Default source captures both your headset mic
+          AND the shared tab/system audio so both sides of the call are recorded.
         </p>
         <div className="capture-mode-grid">
           <div>
@@ -98,22 +96,24 @@ export function HomeView(props: Props): ReactElement {
               disabled={recorder.state.status === 'recording' || !!busy}
               onChange={(e) => setCaptureSource(e.target.value as CaptureAudioSource)}
             >
-              <option value="systemOnly">System only (recommended default)</option>
-              <option value="systemAndMic">System + microphone</option>
-              <option value="micOnly">Microphone only</option>
+              <option value="systemOnly">System only (caller voice via shared tab/window)</option>
+              <option value="systemAndMic">System + microphone (recommended for headset calls)</option>
+              <option value="micOnly">Microphone only (your voice only)</option>
             </select>
           </div>
           <p className="muted">
             {captureSource === 'systemOnly'
-              ? 'Captures call audio directly from system/tab when available. Best to avoid duplicated phrases.'
+              ? 'Captures only the shared tab/window audio. In Chrome, you must tick "Share tab audio" in the share dialog or no audio is captured.'
               : captureSource === 'systemAndMic'
-                ? 'Includes your voice plus call audio. Use a headset to prevent speaker bleed and repeated transcript segments.'
-                : 'Records only microphone input. Use this fallback if system loopback is unavailable.'}
+                ? 'Recommended for CTM web on a headset. When Chrome\u2019s share dialog opens, pick the CTM tab and tick "Share tab audio" (bottom-left) to capture the caller.'
+                : 'Records only your microphone. The caller\u2019s voice will NOT be in the transcript \u2014 use only when you want a transcript of just your side.'}
           </p>
         </div>
-        {captureSource === 'systemAndMic' ? (
+        {captureSource === 'systemAndMic' || captureSource === 'systemOnly' ? (
           <p className="warnings">
-            Headset recommended: using speakers with System + microphone can duplicate call audio and cause repeated phrases.
+            Important: in Chrome&apos;s share dialog, pick the <strong>CTM tab</strong> (not Window/Screen) and tick
+            <strong> &ldquo;Share tab audio&rdquo;</strong> at the bottom-left. Without it, the caller&apos;s voice
+            will not be recorded and the transcript will look like &ldquo;Thank you. Thank you.&rdquo; loops.
           </p>
         ) : null}
         <div className="assistant-console">

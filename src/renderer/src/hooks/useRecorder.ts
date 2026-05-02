@@ -73,11 +73,15 @@ export function useRecorder() {
       const displayAudioTracks = display?.getAudioTracks() ?? []
       const hasSystemAudio = displayAudioTracks.length > 0
       const hasMicAudio = (micStreamRef.current?.getAudioTracks().length ?? 0) > 0
-      let captureNote: string | null = null
       if (wantsSystem && !hasSystemAudio) {
-        captureNote =
-          'No system/tab audio track detected. Fallback to microphone-only capture. Use Windows loopback or tab share audio for best call transcription.'
+        throw new Error(
+          "Caller audio wasn't shared. In Chrome's share dialog, pick the CTM tab (not Window/Screen) and tick 'Share tab audio' (bottom-left), then try again."
+        )
       }
+      const captureNote: string | null =
+        source === 'micOnly'
+          ? 'Mic-only mode: only your voice is recorded. The caller\u2019s voice will not be in the transcript.'
+          : null
 
       if (hasSystemAudio) {
         const displaySource = ctx.createMediaStreamSource(new MediaStream(displayAudioTracks))

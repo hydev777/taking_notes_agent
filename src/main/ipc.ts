@@ -26,6 +26,7 @@ import {
 import { buildEmailPreview, readSmtpFromEnv, sendEmail } from './services/emailService'
 import { fieldsByTemplateId } from '../shared/templateFormMeta'
 import {
+  EmptyAudioError,
   RateLimitError,
   structureTemplateFromTranscript,
   synthesizeTemplateContextParagraph,
@@ -197,6 +198,9 @@ function normalizeProcessingError(error: unknown): string {
   if (error instanceof RateLimitError) {
     return error.message
   }
+  if (error instanceof EmptyAudioError) {
+    return error.message
+  }
   const raw = error instanceof Error ? error.message : String(error)
   const lower = raw.toLowerCase()
   const category =
@@ -301,6 +305,11 @@ async function processSessionOnDiskFile(input: {
       if (error instanceof RateLimitError) {
         // Same daily quota wall would hit on attempts 2 and 3; don't waste audio
         // uploads or chat-request quota. The friendly message is still written below.
+        break
+      }
+      if (error instanceof EmptyAudioError) {
+        // Same audio file → same silence → same hallucination on retry. Re-uploading
+        // the file 3x just burns transcription quota for no benefit.
         break
       }
     }
