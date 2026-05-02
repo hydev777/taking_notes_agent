@@ -13,7 +13,7 @@ type Props = {
 
 type TemplatePanelMode = 'fields' | 'full'
 
-const historyDateFormatter = new Intl.DateTimeFormat('es-DO', {
+const historyDateFormatter = new Intl.DateTimeFormat('en-US', {
   dateStyle: 'medium',
   timeStyle: 'short'
 })
@@ -235,7 +235,7 @@ export function HistoryView(props: Props): ReactElement {
                     disabled={!!busy || s.processingStatus === 'processing' || s.processingStatus === 'completed'}
                     onClick={() => void retryProcessing(s.id)}
                   >
-                    Transcribir llamada y llenar template
+                    Transcribe Call and Fill Template
                   </button>
                   <button type="button" className="danger" onClick={() => void deleteSession(s.id)}>
                     Delete
@@ -275,7 +275,7 @@ export function HistoryView(props: Props): ReactElement {
               <div className="transcript-readonly" aria-readonly="true">
                 {transcript.trim()
                   ? transcript
-                  : 'Transcript is not available yet. If automatic processing failed, click "Transcribir llamada y llenar template".'}
+                  : 'Transcript is not available yet. If automatic processing failed, click "Transcribe Call and Fill Template".'}
               </div>
             </div>
 
@@ -303,7 +303,7 @@ export function HistoryView(props: Props): ReactElement {
                 <>
                   {!transcript.trim() ? (
                     <p className="muted">
-                      Template autofill has not completed yet. Run "Transcribir llamada y llenar template" to generate fields automatically.
+                      Template autofill has not completed yet. Run "Transcribe Call and Fill Template" to generate fields automatically.
                     </p>
                   ) : null}
                   <TemplateEditor templateId={templateId} data={templateData} onChange={setTemplateData} />
@@ -326,7 +326,7 @@ export function HistoryView(props: Props): ReactElement {
                       }
                       onClick={() => void retryProcessing(sessionId)}
                     >
-                      Transcribir llamada y llenar template
+                      Transcribe Call and Fill Template
                     </button>
                     <button
                       type="button"
